@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { LiveGatewayStore } from "../live-store";
-import { SystemSnapshot, Laptop1Event } from "../types";
+import { GatewaySystemSnapshot, Laptop1Event } from "../types";
 
-describe("LiveGatewayStore (Phase 4)", () => {
+describe("LiveGatewayStore (Phase 4.1 Contract Alignment)", () => {
   let store: LiveGatewayStore;
 
-  const sampleSnapshot: SystemSnapshot = {
+  const sampleSnapshot: GatewaySystemSnapshot = {
     laptop1: {
       available: true,
       frontendData: {
@@ -38,51 +38,51 @@ describe("LiveGatewayStore (Phase 4)", () => {
       degradedServiceCount: 1,
       unhealthyServiceCount: 0,
       activeWarnings: 1,
-      source: "status.json",
-      generatedAt: "2026-09-02T12:00:00Z",
-      servedAt: "2026-09-02T12:00:01Z",
+      sourceTimestamp: "2026-09-02T12:00:00Z",
       freshness: "fresh",
     },
     infrastructure: [
       {
-        serviceId: "order-service",
-        name: "Order Service",
+        id: "order-service",
+        name: "order-service",
+        dockerStatus: "running",
+        healthCheck: "healthy",
         healthState: "degraded",
         healthScore: 75,
-        cpuPercent: 88.5,
-        memoryPercent: null, // Preserved null
+        cpu: 88.5,
+        memory: null, // Preserved null
         anomalyScore: 45.0,
-        networkRx: null, // Preserved null
-        networkTx: 1024,
+        dependencyStates: { postgres: "healthy" },
       },
       {
-        serviceId: "auth-service",
-        name: "Auth Service",
+        id: "auth-service",
+        name: "auth-service",
+        dockerStatus: "running",
+        healthCheck: "healthy",
         healthState: "healthy",
         healthScore: 98,
-        cpuPercent: 12.0,
-        memoryPercent: 35.0,
+        cpu: 12.0,
+        memory: 35.0,
         anomalyScore: 0.0,
-        networkRx: 512,
-        networkTx: 512,
+        dependencyStates: { postgres: "healthy" },
       },
     ],
     topology: {
       nodes: [
         {
           id: "order-service",
-          label: "Order Service",
-          type: "service",
-          healthState: "degraded",
-          metrics: { cpu: 88.5, memory: null, anomalyScore: 45.0 },
-          metadata: { containerName: "order-service", role: "core", tier: "app" },
+          name: "order-service",
+          type: "microservice",
+          status: "degraded",
+          healthScore: 75,
+          cpu: 88.5,
+          mem: null,
+          anomalyScore: 45.0,
         },
       ],
       edges: [],
       meta: {
-        source: "docker-compose.yml",
-        generatedAt: "2026-09-02T12:00:00Z",
-        servedAt: "2026-09-02T12:00:01Z",
+        source: "docker-compose",
       },
     },
     telemetry: {
@@ -104,12 +104,21 @@ describe("LiveGatewayStore (Phase 4)", () => {
       activeCount: 1,
       recent: [
         {
-          incidentId: "INC-101",
-          title: "High Memory on order-service",
-          service: "order-service",
+          id: "order-service_12000000",
+          targetService: "order-service",
           severity: "HIGH",
-          priorityScore: 85,
-          timestamp: "2026-09-02T12:00:00Z",
+          priorityScore: 0.85,
+          occurrenceCount: 1,
+          earliestTimestamp: "2026-09-02T12:00:00Z",
+          latestTimestamp: "2026-09-02T12:00:00Z",
+          logClusterTemplate: "High Memory on order-service",
+          serviceHealth: {
+            dockerStatus: "running",
+            healthCheck: "healthy",
+            dependencyStates: {},
+          },
+          logSampleCount: 1,
+          metricsSnapshotCount: 1,
         },
       ],
     },
@@ -127,10 +136,9 @@ describe("LiveGatewayStore (Phase 4)", () => {
     expect(state.systemSummary?.healthScore).toBe(90);
     expect(state.infrastructure.length).toBe(2);
 
-    const order = state.infrastructure.find((s) => s.serviceId === "order-service");
-    expect(order?.memoryPercent).toBeNull();
-    expect(order?.networkRx).toBeNull();
-    expect(order?.networkTx).toBe(1024);
+    const order = state.infrastructure.find((s) => s.id === "order-service");
+    expect(order?.memory).toBeNull();
+    expect(order?.cpu).toBe(88.5);
 
     expect(state.pipeline?.alive).toBeNull();
     expect(state.freshness).toBe("fresh");
@@ -148,26 +156,26 @@ describe("LiveGatewayStore (Phase 4)", () => {
       occurredAt: "2026-09-02T12:00:05Z",
       generatedAt: "2026-09-02T12:00:05Z",
       payload: {
-        serviceId: "order-service",
-        name: "Order Service",
+        id: "order-service",
+        name: "order-service",
+        dockerStatus: "running",
+        healthCheck: "healthy",
         healthState: "healthy",
         healthScore: 95,
-        cpuPercent: 20.0,
-        memoryPercent: 40.0,
+        cpu: 20.0,
+        memory: 40.0,
         anomalyScore: 0.0,
-        networkRx: null,
-        networkTx: 2048,
+        dependencyStates: {},
       },
     };
 
     store.applyEvent(event);
     const state = store.getSnapshot();
-    const order = state.infrastructure.find((s) => s.serviceId === "order-service");
+    const order = state.infrastructure.find((s) => s.id === "order-service");
 
     expect(order?.healthState).toBe("healthy");
     expect(order?.healthScore).toBe(95);
-    expect(order?.cpuPercent).toBe(20.0);
-    expect(state.topology?.nodes[0].healthState).toBe("healthy");
+    expect(order?.cpu).toBe(20.0);
   });
 
   it("should replace full infrastructure on infrastructure.updated", () => {
@@ -183,15 +191,16 @@ describe("LiveGatewayStore (Phase 4)", () => {
       generatedAt: "2026-09-02T12:00:10Z",
       payload: [
         {
-          serviceId: "api-gateway",
-          name: "API Gateway",
+          id: "api-gateway",
+          name: "api-gateway",
+          dockerStatus: "running",
+          healthCheck: "healthy",
           healthState: "healthy",
           healthScore: 100,
-          cpuPercent: 5.0,
-          memoryPercent: 10.0,
+          cpu: 5.0,
+          memory: 10.0,
           anomalyScore: 0.0,
-          networkRx: 100,
-          networkTx: 100,
+          dependencyStates: {},
         },
       ],
     };
@@ -199,7 +208,7 @@ describe("LiveGatewayStore (Phase 4)", () => {
     store.applyEvent(event);
     const state = store.getSnapshot();
     expect(state.infrastructure.length).toBe(1);
-    expect(state.infrastructure[0].serviceId).toBe("api-gateway");
+    expect(state.infrastructure[0].id).toBe("api-gateway");
   });
 
   it("should append telemetry points within max bounds", () => {
@@ -243,19 +252,28 @@ describe("LiveGatewayStore (Phase 4)", () => {
       occurredAt: "2026-09-02T12:01:00Z",
       generatedAt: null,
       payload: {
-        incidentId: "INC-102",
-        title: "Auth Service Latency Spike",
-        service: "auth-service",
+        id: "auth-service_12010000",
+        targetService: "auth-service",
         severity: "CRITICAL",
-        priorityScore: 95,
-        timestamp: "2026-09-02T12:01:00Z",
+        priorityScore: 0.95,
+        occurrenceCount: 1,
+        earliestTimestamp: "2026-09-02T12:01:00Z",
+        latestTimestamp: "2026-09-02T12:01:00Z",
+        logClusterTemplate: "Auth Service Latency Spike",
+        serviceHealth: {
+          dockerStatus: "running",
+          healthCheck: "healthy",
+          dependencyStates: {},
+        },
+        logSampleCount: 1,
+        metricsSnapshotCount: 1,
       },
     };
 
     store.applyEvent(newIncEvent);
     let state = store.getSnapshot();
     expect(state.recentIncidents.length).toBe(2);
-    expect(state.recentIncidents[0].incidentId).toBe("INC-102");
+    expect(state.recentIncidents[0].id).toBe("auth-service_12010000");
 
     const updateIncEvent: Laptop1Event = {
       eventId: "gw-1:4",
@@ -266,19 +284,28 @@ describe("LiveGatewayStore (Phase 4)", () => {
       occurredAt: "2026-09-02T12:01:30Z",
       generatedAt: null,
       payload: {
-        incidentId: "INC-102",
-        title: "Auth Service Latency Spike (Mitigated)",
-        service: "auth-service",
+        id: "auth-service_12010000",
+        targetService: "auth-service",
         severity: "LOW",
-        priorityScore: 20,
-        timestamp: "2026-09-02T12:01:00Z",
+        priorityScore: 0.2,
+        occurrenceCount: 2,
+        earliestTimestamp: "2026-09-02T12:01:00Z",
+        latestTimestamp: "2026-09-02T12:01:30Z",
+        logClusterTemplate: "Auth Service Latency Spike (Mitigated)",
+        serviceHealth: {
+          dockerStatus: "running",
+          healthCheck: "healthy",
+          dependencyStates: {},
+        },
+        logSampleCount: 1,
+        metricsSnapshotCount: 1,
       },
     };
 
     store.applyEvent(updateIncEvent);
     state = store.getSnapshot();
     expect(state.recentIncidents.length).toBe(2);
-    expect(state.recentIncidents[0].title).toBe(
+    expect(state.recentIncidents[0].logClusterTemplate).toBe(
       "Auth Service Latency Spike (Mitigated)"
     );
   });

@@ -81,7 +81,6 @@ export class GatewayEventClient {
         }
       }
 
-      // Stream closed cleanly by server
       this.handleDisconnect();
     } catch (err: any) {
       if (err.name === "AbortError" || controller.signal.aborted) {
@@ -92,7 +91,7 @@ export class GatewayEventClient {
     }
   }
 
-  private parseAndDispatchFrame(frame: string): void {
+  public parseAndDispatchFrame(frame: string): void {
     if (!frame) return;
 
     // Heartbeat comment
@@ -120,29 +119,48 @@ export class GatewayEventClient {
 
     try {
       const parsedData = JSON.parse(dataStr);
+      const effectiveEventType =
+        eventType !== "message" ? eventType : parsedData.eventType;
 
-      if (eventType === "stream.ready") {
-        const readyPayload = parsedData as StreamReadyPayload;
-        this.store.setGatewayInstance(
-          readyPayload.gatewayInstanceId,
-          readyPayload.latestSequence
-        );
+      if (effectiveEventType === "stream.ready") {
+        const readyPayload: StreamReadyPayload =
+          parsedData.payload !== undefined
+            ? parsedData.payload
+            : parsedData;
 
-        if (readyPayload.resyncRequired) {
-          this.store.handleResync();
-        } else if (!readyPayload.replayApplied && this.store.getSnapshot().connection === "connecting") {
-          // Fresh connection bootstrap
-          this.store.performBootstrapFetch();
-        } else {
-          this.store.setConnectionState("live");
+        if (
+          readyPayload &&
+          typeof readyPayload.gatewayInstanceId === "string" &&
+          typeof readyPayload.latestSequence === "number"
+        ) {
+          this.store.setGatewayInstance(
+            readyPayload.gatewayInstanceId,
+            readyPayload.latestSequence
+          );
+
+          if (readyPayload.resyncRequired) {
+            this.store.handleResync();
+          } else if (
+            !readyPayload.replayApplied &&
+            this.store.getSnapshot().connection === "connecting"
+          ) {
+            this.store.performBootstrapFetch();
+          } else {
+            this.store.setConnectionState("live");
+          }
         }
         return;
       }
 
-      if (eventType === "stream.resync_required") {
-        const resyncPayload = parsedData as StreamResyncRequiredPayload;
+      if (effectiveEventType === "stream.resync_required") {
+        const resyncPayload: StreamResyncRequiredPayload =
+          parsedData.payload !== undefined
+            ? parsedData.payload
+            : parsedData;
+
+        const reason = resyncPayload?.reason || "unknown";
         console.warn(
-          `[gateway-sse] Resync required (${resyncPayload.reason}). Refetching system snapshot.`
+          `[gateway-sse] Resync required (${reason}). Refetching system snapshot.`
         );
         this.store.handleResync();
         return;
@@ -152,12 +170,13 @@ export class GatewayEventClient {
       const domainEvent: Laptop1Event = {
         eventId: eventId || parsedData.eventId || "",
         sequence: parsedData.sequence || 0,
-        eventType: (eventType as any) || parsedData.eventType,
+        eventType: effectiveEventType as any,
         source: "laptop1",
         schemaVersion: 1,
         occurredAt: parsedData.occurredAt || new Date().toISOString(),
         generatedAt: parsedData.generatedAt || null,
-        payload: parsedData.payload !== undefined ? parsedData.payload : parsedData,
+        payload:
+          parsedData.payload !== undefined ? parsedData.payload : parsedData,
       };
 
       this.store.applyEvent(domainEvent);
@@ -181,7 +200,6 @@ export class GatewayEventClient {
 
   private startWatchdog(): void {
     this.stopWatchdog();
-    // If no heartbeat or frame received for 35 seconds, trigger reconnect
     this.heartbeatWatchdog = setInterval(() => {
       if (Date.now() - this.lastMessageTimestamp > 35000) {
         console.warn("[gateway-sse] Heartbeat watchdog timeout. Reconnecting...");

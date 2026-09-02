@@ -5,11 +5,9 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MarkerType,
   Handle,
   Position,
   Node,
-  Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -31,14 +29,11 @@ import {
 } from "lucide-react";
 import {
   useInfrastructure,
-  useTopology,
   useRecentIncidents,
-  useTelemetry,
+  useReactFlowGraph,
 } from "@/lib/gateway/selectors";
 import {
-  InfrastructureService,
-  TopologyNode,
-  TopologyEdge,
+  GatewayInfrastructureDetail,
 } from "@/lib/gateway/types";
 import { fetchGatewayServiceDetail } from "@/lib/gateway/client";
 
@@ -109,50 +104,39 @@ const CustomServiceNode = ({ data }: any) => {
 
 export default function InfrastructurePage() {
   const nodeTypes = useMemo(() => ({ custom: CustomServiceNode }), []);
-  const topology = useTopology();
   const infrastructure = useInfrastructure();
+  const { nodes, edges } = useReactFlowGraph();
   const { recent } = useRecentIncidents();
 
   // State for Service Detail Drawer
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [extraServiceDetail, setExtraServiceDetail] = useState<InfrastructureService | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
+  const [extraServiceDetail, setExtraServiceDetail] = useState<GatewayInfrastructureDetail | null>(null);
 
-  // When a service is selected, load detailed state
+  // When a service is selected, load detailed state from detail endpoint
   useEffect(() => {
     if (!selectedServiceId) {
       setExtraServiceDetail(null);
       return;
     }
-    // Check cached state first
-    const cached = infrastructure.find(
-      (s) => s.serviceId === selectedServiceId || s.name === selectedServiceId
-    );
-    if (cached) {
-      setExtraServiceDetail(cached);
-    } else {
-      setLoadingDetail(true);
-      fetchGatewayServiceDetail(selectedServiceId)
-        .then((res) => setExtraServiceDetail(res))
-        .catch(() => {})
-        .finally(() => setLoadingDetail(false));
-    }
-  }, [selectedServiceId, infrastructure]);
+    fetchGatewayServiceDetail(selectedServiceId)
+      .then((res) => setExtraServiceDetail(res))
+      .catch(() => {});
+  }, [selectedServiceId]);
 
   // Compute real average CPU & Memory across active services
-  const { avgCpu, avgMemory, activeCount } = useMemo(() => {
+  const { avgCpu, avgMemory } = useMemo(() => {
     let totalCpu = 0;
     let cpuCount = 0;
     let totalMem = 0;
     let memCount = 0;
 
     for (const s of infrastructure) {
-      if (typeof s.cpuPercent === "number") {
-        totalCpu += s.cpuPercent;
+      if (typeof s.cpu === "number") {
+        totalCpu += s.cpu;
         cpuCount++;
       }
-      if (typeof s.memoryPercent === "number") {
-        totalMem += s.memoryPercent;
+      if (typeof s.memory === "number") {
+        totalMem += s.memory;
         memCount++;
       }
     }
@@ -160,96 +144,16 @@ export default function InfrastructurePage() {
     return {
       avgCpu: cpuCount > 0 ? totalCpu / cpuCount : null,
       avgMemory: memCount > 0 ? totalMem / memCount : null,
-      activeCount: infrastructure.length,
     };
   }, [infrastructure]);
-
-  // Deterministic layout generation from topology
-  const { nodes, edges } = useMemo(() => {
-    if (!topology || !topology.nodes || topology.nodes.length === 0) {
-      return { nodes: [], edges: [] };
-    }
-
-    // Determine rank / tier for each node
-    const incomingCount: Record<string, number> = {};
-    for (const node of topology.nodes) {
-      incomingCount[node.id] = 0;
-    }
-    for (const edge of topology.edges) {
-      incomingCount[edge.target] = (incomingCount[edge.target] || 0) + 1;
-    }
-
-    // Group nodes by tier
-    const topTier: TopologyNode[] = [];
-    const middleTier: TopologyNode[] = [];
-    const bottomTier: TopologyNode[] = [];
-
-    for (const node of topology.nodes) {
-      const lower = node.id.toLowerCase();
-      if (incomingCount[node.id] === 0 || lower.includes("gateway")) {
-        topTier.push(node);
-      } else if (lower.includes("db") || lower.includes("postgres") || lower.includes("chroma")) {
-        bottomTier.push(node);
-      } else {
-        middleTier.push(node);
-      }
-    }
-
-    const flowNodes: Node[] = [];
-
-    const placeTier = (tierNodes: TopologyNode[], y: number) => {
-      const spacing = 220;
-      const startX = Math.max(50, 400 - (tierNodes.length * spacing) / 2);
-      tierNodes.forEach((n, idx) => {
-        const liveService = infrastructure.find(
-          (s) => s.serviceId === n.id || s.name === n.label
-        );
-        flowNodes.push({
-          id: n.id,
-          type: "custom",
-          position: { x: startX + idx * spacing, y },
-          data: {
-            id: n.id,
-            label: n.label || n.id,
-            healthState: liveService?.healthState || n.healthState || "unknown",
-            cpu: liveService?.cpuPercent ?? n.metrics?.cpu ?? null,
-            memory: liveService?.memoryPercent ?? n.metrics?.memory ?? null,
-          },
-        });
-      });
-    };
-
-    placeTier(topTier, 40);
-    placeTier(middleTier, 180);
-    placeTier(bottomTier, 320);
-
-    const flowEdges: Edge[] = topology.edges.map((e) => {
-      const isBad = !e.healthy;
-      return {
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed, color: isBad ? "#ef4444" : "#52525b" },
-        style: {
-          stroke: isBad ? "#ef4444" : "#52525b",
-          strokeWidth: isBad ? 2.5 : 1.5,
-        },
-      };
-    });
-
-    return { nodes: flowNodes, edges: flowEdges };
-  }, [topology, infrastructure]);
 
   const onNodeClick = (_: React.MouseEvent, node: Node) => {
     setSelectedServiceId(node.id);
   };
 
-  const selectedService =
-    extraServiceDetail ||
-    infrastructure.find(
-      (s) => s.serviceId === selectedServiceId || s.name === selectedServiceId
-    );
+  const cachedListItem = infrastructure.find(
+    (s) => s.id === selectedServiceId || s.name === selectedServiceId
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto h-[calc(100vh-6rem)] flex flex-col relative overflow-hidden">
@@ -356,7 +260,7 @@ export default function InfrastructurePage() {
                   <div className="font-bold text-zinc-100 flex items-center gap-2 truncate">
                     <Server className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span className="truncate uppercase">
-                      {selectedService?.name || selectedServiceId}
+                      {extraServiceDetail?.name || cachedListItem?.name || selectedServiceId}
                     </span>
                   </div>
                   <button
@@ -378,35 +282,36 @@ export default function InfrastructurePage() {
                         <span className="text-zinc-400">Health State</span>
                         <span
                           className={`font-bold capitalize ${
-                            selectedService?.healthState === "healthy"
+                            (extraServiceDetail?.healthState || cachedListItem?.healthState) === "healthy"
                               ? "text-emerald-400"
-                              : selectedService?.healthState === "degraded"
+                              : (extraServiceDetail?.healthState || cachedListItem?.healthState) === "degraded"
                               ? "text-amber-400"
                               : "text-red-400"
                           }`}
                         >
-                          {selectedService?.healthState || "—"}
+                          {extraServiceDetail?.healthState || cachedListItem?.healthState || "—"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Health Score</span>
                         <span className="font-mono text-zinc-200">
-                          {selectedService?.healthScore !== null &&
-                          selectedService?.healthScore !== undefined
-                            ? `${selectedService.healthScore}%`
+                          {extraServiceDetail?.healthScore !== null && extraServiceDetail?.healthScore !== undefined
+                            ? `${extraServiceDetail.healthScore}%`
+                            : cachedListItem?.healthScore !== null && cachedListItem?.healthScore !== undefined
+                            ? `${cachedListItem.healthScore}%`
                             : "—"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Docker Status</span>
                         <span className="font-mono text-zinc-200">
-                          {selectedService?.dockerStatus || "—"}
+                          {extraServiceDetail?.dockerStatus || cachedListItem?.dockerStatus || "—"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Health Check</span>
                         <span className="font-mono text-zinc-200">
-                          {selectedService?.healthCheck || "—"}
+                          {extraServiceDetail?.healthCheck || cachedListItem?.healthCheck || "—"}
                         </span>
                       </div>
                     </div>
@@ -421,36 +326,36 @@ export default function InfrastructurePage() {
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
                         <div className="text-xs text-zinc-500 mb-1">CPU Usage</div>
                         <div className="font-mono text-sm text-zinc-200">
-                          {selectedService?.cpuPercent !== null &&
-                          selectedService?.cpuPercent !== undefined
-                            ? `${selectedService.cpuPercent.toFixed(1)}%`
+                          {extraServiceDetail?.cpuPercent !== null && extraServiceDetail?.cpuPercent !== undefined
+                            ? `${extraServiceDetail.cpuPercent.toFixed(1)}%`
+                            : cachedListItem?.cpu !== null && cachedListItem?.cpu !== undefined
+                            ? `${cachedListItem.cpu.toFixed(1)}%`
                             : "—"}
                         </div>
                       </div>
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
                         <div className="text-xs text-zinc-500 mb-1">Memory</div>
                         <div className="font-mono text-sm text-zinc-200">
-                          {selectedService?.memoryPercent !== null &&
-                          selectedService?.memoryPercent !== undefined
-                            ? `${selectedService.memoryPercent.toFixed(1)}%`
+                          {extraServiceDetail?.memoryPercent !== null && extraServiceDetail?.memoryPercent !== undefined
+                            ? `${extraServiceDetail.memoryPercent.toFixed(1)}%`
+                            : cachedListItem?.memory !== null && cachedListItem?.memory !== undefined
+                            ? `${cachedListItem.memory.toFixed(1)}%`
                             : "—"}
                         </div>
                       </div>
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
                         <div className="text-xs text-zinc-500 mb-1">Network RX</div>
                         <div className="font-mono text-xs text-zinc-300">
-                          {selectedService?.networkRx !== null &&
-                          selectedService?.networkRx !== undefined
-                            ? `${(selectedService.networkRx / 1024).toFixed(1)} KB`
+                          {extraServiceDetail?.networkRx !== null && extraServiceDetail?.networkRx !== undefined
+                            ? `${(extraServiceDetail.networkRx / 1024).toFixed(1)} KB`
                             : "—"}
                         </div>
                       </div>
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
                         <div className="text-xs text-zinc-500 mb-1">Network TX</div>
                         <div className="font-mono text-xs text-zinc-300">
-                          {selectedService?.networkTx !== null &&
-                          selectedService?.networkTx !== undefined
-                            ? `${(selectedService.networkTx / 1024).toFixed(1)} KB`
+                          {extraServiceDetail?.networkTx !== null && extraServiceDetail?.networkTx !== undefined
+                            ? `${(extraServiceDetail.networkTx / 1024).toFixed(1)} KB`
                             : "—"}
                         </div>
                       </div>
@@ -488,7 +393,7 @@ export default function InfrastructurePage() {
             {recent && recent.length > 0 ? (
               recent.map((inc) => (
                 <div
-                  key={inc.incidentId}
+                  key={inc.id}
                   className="p-3 bg-zinc-950 rounded-lg border border-zinc-800 flex items-start gap-3 transition-all hover:border-zinc-700"
                 >
                   <span

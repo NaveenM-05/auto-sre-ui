@@ -1,21 +1,90 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { LiveGatewayStore } from "../live-store";
+import { GatewayEventClient } from "../events";
 import { Laptop1Event } from "../types";
 
-describe("Gateway Event Client & Stream Processing (Phase 4)", () => {
+describe("Gateway Event Client & Stream Processing (Phase 4.1)", () => {
   let store: LiveGatewayStore;
+  let client: GatewayEventClient;
 
   beforeEach(() => {
     store = new LiveGatewayStore();
+    client = new GatewayEventClient(store);
   });
 
-  it("should process stream.ready and transition connection state", () => {
+  it("should process stream.ready envelope with payload and set instance ID and sequence", () => {
     store.setConnectionState("connecting");
-    store.setGatewayInstance("gw-instance-1", 10);
 
+    const rawFrame = `event: stream.ready\ndata: ${JSON.stringify({
+      eventType: "stream.ready",
+      source: "laptop1",
+      schemaVersion: 1,
+      occurredAt: "2026-09-02T12:00:00Z",
+      payload: {
+        gatewayInstanceId: "gw-instance-42",
+        latestSequence: 100,
+        connectedAt: "2026-09-02T12:00:00Z",
+        replayApplied: true,
+        resyncRequired: false,
+      },
+    })}`;
+
+    client.parseAndDispatchFrame(rawFrame);
     const state = store.getSnapshot();
-    expect(state.gatewayInstanceId).toBe("gw-instance-1");
-    expect(state.latestSequence).toBe(10);
+
+    expect(state.gatewayInstanceId).toBe("gw-instance-42");
+    expect(state.latestSequence).toBe(100);
+    expect(state.connection).toBe("live");
+  });
+
+  it("should handle stream.ready with resyncRequired = true", () => {
+    store.setConnectionState("connecting");
+    const resyncSpy = vi.spyOn(store, "handleResync").mockImplementation(async () => {});
+
+    const rawFrame = `event: stream.ready\ndata: ${JSON.stringify({
+      eventType: "stream.ready",
+      source: "laptop1",
+      schemaVersion: 1,
+      occurredAt: "2026-09-02T12:00:00Z",
+      payload: {
+        gatewayInstanceId: "gw-instance-42",
+        latestSequence: 100,
+        connectedAt: "2026-09-02T12:00:00Z",
+        replayApplied: false,
+        resyncRequired: true,
+      },
+    })}`;
+
+    client.parseAndDispatchFrame(rawFrame);
+    expect(resyncSpy).toHaveBeenCalled();
+  });
+
+  it("should handle stream.resync_required and extract reason from payload", () => {
+    store.setConnectionState("live");
+    const resyncSpy = vi.spyOn(store, "handleResync").mockImplementation(async () => {});
+
+    const rawFrame = `event: stream.resync_required\ndata: ${JSON.stringify({
+      eventType: "stream.resync_required",
+      source: "laptop1",
+      schemaVersion: 1,
+      occurredAt: "2026-09-02T12:00:00Z",
+      payload: {
+        gatewayInstanceId: "gw-instance-99",
+        requestedLastEventId: "gw-instance-42:50",
+        reason: "gateway_instance_mismatch",
+      },
+    })}`;
+
+    client.parseAndDispatchFrame(rawFrame);
+    expect(resyncSpy).toHaveBeenCalled();
+  });
+
+  it("should handle malformed control envelope safely without crashing", () => {
+    expect(() => {
+      client.parseAndDispatchFrame("event: stream.ready\ndata: { invalid json ");
+      client.parseAndDispatchFrame("event: stream.ready\ndata: null");
+      client.parseAndDispatchFrame("event: stream.resync_required\ndata: {}");
+    }).not.toThrow();
   });
 
   it("should ignore duplicate event IDs", () => {
@@ -61,7 +130,6 @@ describe("Gateway Event Client & Stream Processing (Phase 4)", () => {
   });
 
   it("should buffer events during bootstrap fetch and apply them in sequence order", () => {
-    // Simulate events arriving while isSnapshotFetching is true
     (store as any).isSnapshotFetching = true;
 
     const eventA: Laptop1Event = {
@@ -79,15 +147,12 @@ describe("Gateway Event Client & Stream Processing (Phase 4)", () => {
         degradedServiceCount: 0,
         unhealthyServiceCount: 0,
         activeWarnings: 0,
-        source: "status.json",
-        generatedAt: "2026-09-02T12:00:01Z",
-        servedAt: "2026-09-02T12:00:01Z",
+        sourceTimestamp: "2026-09-02T12:00:01Z",
         freshness: "fresh",
       },
     };
 
     store.applyEvent(eventA);
-    // Should be buffered, not immediately applied
     expect(store.getSnapshot().systemSummary).toBeNull();
   });
 });

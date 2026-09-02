@@ -1,4 +1,4 @@
-// Types mirroring locked backend contracts from Laptop 1 UI Gateway
+// Exact locked backend DTO contracts from Laptop 1 UI Gateway (tcp_aum)
 
 export type HealthClassification = "healthy" | "degraded" | "unhealthy";
 export type FreshnessClassification = "fresh" | "delayed" | "stale" | "unavailable";
@@ -42,8 +42,8 @@ export interface UiPipelineResponse {
   lastRunId?: string | null;
   lastRunStatus?: string | null;
   lastRunFinishedAt?: string | null;
-  runStatusCounts?: Record<string, number> | null;
-  queueDepth?: number | null;
+  runStatusCounts?: Record<string, number>;
+  queueDepth?: number;
   readiness?: {
     status: string;
     contractsValid: boolean | null;
@@ -55,86 +55,87 @@ export interface UiPipelineResponse {
     phase2Commit?: string | null;
   } | null;
   latestResultCount?: number | null;
-  source: string;
+  source: "integration_api" | "status_projection" | "none";
   generatedAt: string | null;
   servedAt: string;
   freshness: FreshnessClassification;
 }
 
-export interface SystemSummary {
+export interface GatewaySystemSummary {
   healthScore: number | null;
+  activeWarnings: number;
   serviceCount: number;
   healthyServiceCount: number;
   degradedServiceCount: number;
   unhealthyServiceCount: number;
-  activeWarnings: number;
-  source: string;
-  generatedAt: string | null;
-  servedAt: string;
+  sourceTimestamp: string;
   freshness: FreshnessClassification;
 }
 
-export interface InfrastructureService {
-  serviceId: string;
+export interface GatewayInfrastructureService {
+  id: string;
   name: string;
-  healthState: HealthClassification;
+  dockerStatus: string;
+  healthCheck: string;
+  healthScore: number | null;
+  cpu: number | null;
+  memory: number | null;
+  anomalyScore: number | null;
+  healthState: HealthClassification | string;
+  dependencyStates: Record<string, string>;
+}
+
+export interface GatewayInfrastructureDetail {
+  id: string;
+  name: string;
+  dockerStatus: string;
+  healthCheck: string;
+  healthState: HealthClassification | string;
   healthScore: number | null;
   cpuPercent: number | null;
   memoryPercent: number | null;
   anomalyScore: number | null;
   networkRx: number | null;
   networkTx: number | null;
-  dockerStatus?: string;
-  healthCheck?: string;
-  startedAt?: string | null;
-  exitCode?: number | null;
-  dependencyStates?: Record<string, HealthClassification>;
-  freshness?: FreshnessClassification;
-  lastUpdated?: string | null;
+  startedAt: string | null;
+  exitCode: number | null;
+  dependencyStates: Record<string, string>;
+  lastUpdated: string;
+  freshness: FreshnessClassification;
 }
 
-export interface TopologyNode {
+export interface GatewayTopologyNode {
   id: string;
-  label: string;
+  name: string;
   type: string;
-  healthState: HealthClassification | "unknown";
-  metrics: {
-    cpu: number | null;
-    memory: number | null;
-    anomalyScore: number | null;
-  };
-  metadata: {
-    containerName: string;
-    role: string;
-    tier: string;
-  };
+  status: string; // "healthy" | "degraded" | "unhealthy" | "unknown"
+  healthScore: number | null;
+  cpu: number | null;
+  mem: number | null;
+  anomalyScore: number | null;
 }
 
-export interface TopologyEdge {
-  id: string;
+export interface GatewayTopologyEdge {
   source: string;
   target: string;
-  type: string;
-  healthy: boolean;
+  status: string; // "healthy" | "degraded" | "unknown"
 }
 
-export interface TopologyGraph {
-  nodes: TopologyNode[];
-  edges: TopologyEdge[];
+export interface GatewayTopologyGraph {
+  nodes: GatewayTopologyNode[];
+  edges: GatewayTopologyEdge[];
   meta: {
     source: string;
-    generatedAt: string | null;
-    servedAt: string;
   };
 }
 
 export interface TelemetryPoint {
-  timestamp: string;
   container: string;
+  timestamp: string;
   cpu: number | null;
   memory: number | null;
-  networkRx: number | null;
   networkTx: number | null;
+  networkRx: number | null;
 }
 
 export interface HealthHistoryPoint {
@@ -142,31 +143,42 @@ export interface HealthHistoryPoint {
   score: number | null;
 }
 
-export interface IncidentSummary {
-  incidentId: string;
-  title: string;
-  service: string;
+export interface GatewayIncidentItem {
+  id: string;
+  targetService: string;
   severity: string;
   priorityScore: number | null;
-  timestamp: string;
-  evidenceCount?: number;
+  occurrenceCount: number;
+  earliestTimestamp: string | null;
+  latestTimestamp: string | null;
+  logClusterTemplate: string;
+  serviceHealth: {
+    dockerStatus: string;
+    healthCheck: string;
+    dependencyStates: Record<string, string>;
+  };
+  logSampleCount: number;
+  metricsSnapshotCount: number;
 }
 
-export interface SystemSnapshot {
+export interface GatewaySystemSnapshot {
   laptop1: UiHealthResponse;
   pipeline: UiPipelineResponse;
-  summary: SystemSummary;
-  infrastructure: InfrastructureService[];
-  topology: TopologyGraph;
+  summary: GatewaySystemSummary | null;
+  infrastructure: GatewayInfrastructureService[];
+  topology: GatewayTopologyGraph;
   telemetry: {
     latest: TelemetryPoint[];
-    summary: { pointCount: number; containerCount: number };
+    summary: {
+      pointCount: number;
+      containerCount: number;
+    };
   };
   healthHistory: HealthHistoryPoint[];
   incidents: {
     totalCount: number;
     activeCount: number;
-    recent: IncidentSummary[];
+    recent: GatewayIncidentItem[];
   };
   meta: {
     servedAt: string;
@@ -202,7 +214,7 @@ export interface Laptop1Event<T = any> {
 export interface StreamReadyPayload {
   gatewayInstanceId: string;
   latestSequence: number;
-  connectedAt: string;
+  connectedAt?: string;
   replayApplied: boolean;
   resyncRequired: boolean;
 }

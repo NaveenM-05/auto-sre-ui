@@ -1,10 +1,11 @@
 import {
-  SystemSnapshot,
+  GatewaySystemSnapshot,
   UiHealthResponse,
   UiPipelineResponse,
-  SystemSummary,
-  InfrastructureService,
-  TopologyGraph,
+  GatewaySystemSummary,
+  GatewayInfrastructureService,
+  GatewayInfrastructureDetail,
+  GatewayTopologyGraph,
 } from "./types";
 
 const PROXY_BASE = "/api/gateway";
@@ -42,8 +43,8 @@ async function fetchJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function fetchGatewaySnapshot(): Promise<SystemSnapshot> {
-  return fetchJson<SystemSnapshot>("/system/snapshot");
+export async function fetchGatewaySnapshot(): Promise<GatewaySystemSnapshot> {
+  return fetchJson<GatewaySystemSnapshot>("/system/snapshot");
 }
 
 export async function fetchGatewayHealth(): Promise<UiHealthResponse> {
@@ -54,20 +55,20 @@ export async function fetchGatewayPipeline(): Promise<UiPipelineResponse> {
   return fetchJson<UiPipelineResponse>("/laptop1/pipeline");
 }
 
-export async function fetchGatewaySummary(): Promise<SystemSummary> {
-  return fetchJson<SystemSummary>("/system/summary");
+export async function fetchGatewaySummary(): Promise<GatewaySystemSummary> {
+  return fetchJson<GatewaySystemSummary>("/system/summary");
 }
 
-export async function fetchGatewayInfrastructure(): Promise<InfrastructureService[]> {
-  return fetchJson<InfrastructureService[]>("/infrastructure");
+export async function fetchGatewayInfrastructure(): Promise<GatewayInfrastructureService[]> {
+  return fetchJson<GatewayInfrastructureService[]>("/infrastructure");
 }
 
 export async function fetchGatewayServiceDetail(
   serviceId: string
-): Promise<InfrastructureService> {
-  return fetchJson<InfrastructureService>(`/infrastructure/${encodeURIComponent(serviceId)}`);
+): Promise<GatewayInfrastructureDetail> {
+  return fetchJson<GatewayInfrastructureDetail>(`/infrastructure/${encodeURIComponent(serviceId)}`);
 }
 
-export async function fetchGatewayTopology(): Promise<TopologyGraph> {
-  return fetchJson<TopologyGraph>("/topology");
+export async function fetchGatewayTopology(): Promise<GatewayTopologyGraph> {
+  return fetchJson<GatewayTopologyGraph>("/topology");
 }

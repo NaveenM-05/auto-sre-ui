@@ -1,17 +1,16 @@
 import {
   ConnectionState,
   FreshnessClassification,
-  InfrastructureService,
+  GatewayInfrastructureService,
+  GatewayIncidentItem,
+  GatewaySystemSnapshot,
+  GatewaySystemSummary,
+  GatewayTopologyGraph,
+  HealthHistoryPoint,
   Laptop1Event,
-  Laptop1EventType,
-  SystemSnapshot,
-  SystemSummary,
   TelemetryPoint,
-  TopologyGraph,
   UiHealthResponse,
   UiPipelineResponse,
-  HealthHistoryPoint,
-  IncidentSummary,
 } from "./types";
 import { fetchGatewaySnapshot } from "./client";
 
@@ -19,12 +18,12 @@ export interface GatewayStoreState {
   connection: ConnectionState;
   laptop1Health: UiHealthResponse | null;
   pipeline: UiPipelineResponse | null;
-  systemSummary: SystemSummary | null;
-  infrastructure: InfrastructureService[];
-  topology: TopologyGraph | null;
+  systemSummary: GatewaySystemSummary | null;
+  infrastructure: GatewayInfrastructureService[];
+  topology: GatewayTopologyGraph | null;
   telemetry: Record<string, TelemetryPoint[]>;
   healthHistory: HealthHistoryPoint[];
-  recentIncidents: IncidentSummary[];
+  recentIncidents: GatewayIncidentItem[];
   activeIncidentCount: number | null;
   totalIncidentCount: number | null;
   lastEventReceivedAt: string | null;
@@ -83,7 +82,10 @@ export class LiveGatewayStore {
   }
 
   public setConnectionState(connection: ConnectionState, error?: string | null) {
-    if (this.state.connection === connection && this.state.lastError === (error ?? null)) {
+    if (
+      this.state.connection === connection &&
+      this.state.lastError === (error ?? null)
+    ) {
       return;
     }
     this.state = {
@@ -106,8 +108,10 @@ export class LiveGatewayStore {
   // ==========================================
   // HYDRATION (SNAPSHOT)
   // ==========================================
-  public hydrate(snapshot: SystemSnapshot) {
-    const nextTelemetry: Record<string, TelemetryPoint[]> = { ...this.state.telemetry };
+  public hydrate(snapshot: GatewaySystemSnapshot) {
+    const nextTelemetry: Record<string, TelemetryPoint[]> = {
+      ...this.state.telemetry,
+    };
 
     if (snapshot.telemetry?.latest) {
       for (const pt of snapshot.telemetry.latest) {
@@ -124,7 +128,7 @@ export class LiveGatewayStore {
     }
 
     const sourceGen =
-      snapshot.summary?.generatedAt ||
+      snapshot.summary?.sourceTimestamp ||
       snapshot.laptop1?.frontendData?.generatedAt ||
       snapshot.pipeline?.generatedAt ||
       null;
@@ -143,7 +147,9 @@ export class LiveGatewayStore {
       infrastructure: snapshot.infrastructure || [],
       topology: snapshot.topology || null,
       telemetry: nextTelemetry,
-      healthHistory: (snapshot.healthHistory || []).slice(-MAX_HEALTH_HISTORY_POINTS),
+      healthHistory: (snapshot.healthHistory || []).slice(
+        -MAX_HEALTH_HISTORY_POINTS
+      ),
       recentIncidents: snapshot.incidents?.recent || [],
       activeIncidentCount: snapshot.incidents?.activeCount ?? null,
       totalIncidentCount: snapshot.incidents?.totalCount ?? null,
@@ -159,7 +165,6 @@ export class LiveGatewayStore {
   // SSE EVENT DISPATCH
   // ==========================================
   public applyEvent(event: Laptop1Event) {
-    // If snapshot fetch is currently inflight, buffer event to prevent race condition
     if (this.isSnapshotFetching) {
       this.pendingBootstrapEvents.push(event);
       return;
@@ -186,19 +191,23 @@ export class LiveGatewayStore {
 
     switch (event.eventType) {
       case "system.summary.updated": {
-        const summary = event.payload as SystemSummary;
+        const summary = event.payload as GatewaySystemSummary;
         nextState.systemSummary = summary;
-        if (summary.generatedAt) nextState.sourceGeneratedAt = summary.generatedAt;
-        if (summary.freshness) nextState.freshness = summary.freshness;
+        if (summary.sourceTimestamp) {
+          nextState.sourceGeneratedAt = summary.sourceTimestamp;
+        }
+        if (summary.freshness) {
+          nextState.freshness = summary.freshness;
+        }
         stateChanged = true;
         break;
       }
 
       case "infrastructure.service.updated": {
-        const updatedService = event.payload as InfrastructureService;
+        const updatedService = event.payload as GatewayInfrastructureService;
         const existingList = nextState.infrastructure;
         const index = existingList.findIndex(
-          (s) => s.serviceId === updatedService.serviceId
+          (s) => s.id === updatedService.id || s.name === updatedService.name
         );
         if (index >= 0) {
           const updatedList = [...existingList];
@@ -207,42 +216,19 @@ export class LiveGatewayStore {
         } else {
           nextState.infrastructure = [...existingList, updatedService];
         }
-
-        // Also update matching topology node health & metrics if topology exists
-        if (nextState.topology) {
-          const nodeIdx = nextState.topology.nodes.findIndex(
-            (n) => n.id === updatedService.serviceId || n.label === updatedService.name
-          );
-          if (nodeIdx >= 0) {
-            const updatedNodes = [...nextState.topology.nodes];
-            updatedNodes[nodeIdx] = {
-              ...updatedNodes[nodeIdx],
-              healthState: updatedService.healthState,
-              metrics: {
-                cpu: updatedService.cpuPercent,
-                memory: updatedService.memoryPercent,
-                anomalyScore: updatedService.anomalyScore,
-              },
-            };
-            nextState.topology = {
-              ...nextState.topology,
-              nodes: updatedNodes,
-            };
-          }
-        }
         stateChanged = true;
         break;
       }
 
       case "infrastructure.updated": {
-        const list = event.payload as InfrastructureService[];
+        const list = event.payload as GatewayInfrastructureService[];
         nextState.infrastructure = list;
         stateChanged = true;
         break;
       }
 
       case "topology.updated": {
-        const topology = event.payload as TopologyGraph;
+        const topology = event.payload as GatewayTopologyGraph;
         nextState.topology = topology;
         stateChanged = true;
         break;
@@ -275,9 +261,9 @@ export class LiveGatewayStore {
       }
 
       case "incident.created": {
-        const incident = event.payload as IncidentSummary;
+        const incident = event.payload as GatewayIncidentItem;
         const filtered = nextState.recentIncidents.filter(
-          (inc) => inc.incidentId !== incident.incidentId
+          (inc) => inc.id !== incident.id
         );
         nextState.recentIncidents = [incident, ...filtered].slice(0, 50);
         if (nextState.activeIncidentCount !== null) {
@@ -288,19 +274,19 @@ export class LiveGatewayStore {
       }
 
       case "incident.updated": {
-        const incident = event.payload as IncidentSummary;
+        const incident = event.payload as GatewayIncidentItem;
         const idx = nextState.recentIncidents.findIndex(
-          (inc) => inc.incidentId === incident.incidentId
+          (inc) => inc.id === incident.id
         );
         if (idx >= 0) {
           const updated = [...nextState.recentIncidents];
           updated[idx] = incident;
           nextState.recentIncidents = updated;
         } else {
-          nextState.recentIncidents = [incident, ...nextState.recentIncidents].slice(
-            0,
-            50
-          );
+          nextState.recentIncidents = [
+            incident,
+            ...nextState.recentIncidents,
+          ].slice(0, 50);
         }
         stateChanged = true;
         break;
@@ -327,11 +313,13 @@ export class LiveGatewayStore {
       }
 
       default:
-        // Unknown or control events
         break;
     }
 
-    if (stateChanged || nextState.lastEventReceivedAt !== this.state.lastEventReceivedAt) {
+    if (
+      stateChanged ||
+      nextState.lastEventReceivedAt !== this.state.lastEventReceivedAt
+    ) {
       this.state = nextState;
       this.notify();
     }
@@ -348,7 +336,6 @@ export class LiveGatewayStore {
       const snapshot = await fetchGatewaySnapshot();
       this.hydrate(snapshot);
 
-      // Apply any buffered events received during snapshot fetch in sequence order
       this.isSnapshotFetching = false;
       const buffered = [...this.pendingBootstrapEvents];
       this.pendingBootstrapEvents = [];
@@ -381,5 +368,4 @@ export class LiveGatewayStore {
   }
 }
 
-// Global Singleton Store Instance
 export const globalGatewayStore = new LiveGatewayStore();

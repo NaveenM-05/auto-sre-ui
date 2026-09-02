@@ -152,7 +152,7 @@ export default function MissionControl() {
                         {topIncident.severity}
                       </span>
                       <span className="text-zinc-400 font-mono text-sm">
-                        {topIncident.incidentId}
+                        {topIncident.id}
                       </span>
                       <span className="text-zinc-400 text-xs font-mono">
                         Service: {topIncident.service}
