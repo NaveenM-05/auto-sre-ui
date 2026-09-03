@@ -1,246 +1,476 @@
 "use client";
-import Link from 'next/link';
 
-import React, { useState } from 'react';
-import { 
-  History, Search, Filter, ShieldAlert, CheckCircle2, 
-  Clock, Activity, AlertTriangle, ArrowRight, Lock, 
-  Terminal, Server, PlayCircle, GitCommit
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import {
+  History,
+  Search,
+  Filter,
+  ShieldAlert,
+  Clock,
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Server,
+  FileText,
+  Activity as MetricIcon,
+  ChevronRight,
+  Database,
+  Network,
+} from "lucide-react";
+import { useGatewayStore } from "@/lib/gateway/selectors";
+import {
+  fetchGatewayIncidents,
+  fetchGatewayIncidentDetail,
+  fetchGatewayIncidentEvidence,
+} from "@/lib/gateway/client";
+import {
+  GatewayIncidentItem,
+  GatewayIncidentDetail,
+  GatewayEvidenceItem,
+} from "@/lib/gateway/types";
+import { toIncidentDisplayModel } from "@/lib/gateway/view-models";
 
-// Mock Incident Database (Fulfills 6.1 Incident List requirements)
-const mockIncidents = [
-  {
-    id: 'INC-9042',
-    severity: 'P1',
-    service: 'order-service',
-    title: 'OOMKilled Event Cascade',
-    status: 'RESOLVED',
-    startTime: '10:42:01',
-    duration: '4m 12s',
-    confidence: { diagnosis: 94, action: 88 },
-    autonomy: 'FULL_AUTONOMY',
-    timeline: [
-      { step: 'Anomaly Detected', time: '10:42:01', state: 'completed' },
-      { step: 'Evidence Collected (Logs, Metrics)', time: '10:42:08', state: 'completed' },
-      { step: 'RCA & Hypothesis Generation', time: '10:42:15', state: 'completed' },
-      { step: 'Agentic Debate (Consensus Reached)', time: '10:43:02', state: 'completed' },
-      { step: 'Shadow Validation (Passed)', time: '10:44:10', state: 'completed' },
-      { step: 'Execution (Memory Limit Patch)', time: '10:44:15', state: 'completed' },
-      { step: 'Verification & Recovery', time: '10:46:13', state: 'completed' },
-    ]
-  },
-  {
-    id: 'INC-9043',
-    severity: 'P2',
-    service: 'api-gateway',
-    title: 'Latency Spike > 5000ms',
-    status: 'EXECUTING',
-    startTime: '11:15:30',
-    duration: '2m 05s (Ongoing)',
-    confidence: { diagnosis: 82, action: 91 },
-    autonomy: 'APPROVAL_REQUIRED',
-    timeline: [
-      { step: 'Anomaly Detected', time: '11:15:30', state: 'completed' },
-      { step: 'Evidence Collected (Traces)', time: '11:15:45', state: 'completed' },
-      { step: 'RCA & Hypothesis Generation', time: '11:16:10', state: 'completed' },
-      { step: 'Shadow Validation (Passed)', time: '11:17:00', state: 'completed' },
-      { step: 'Safety Gate (Operator Approved)', time: '11:17:25', state: 'completed' },
-      { step: 'Execution (Scale Up Replicas)', time: '11:17:35', state: 'current' },
-      { step: 'Verification & Recovery', time: '--:--', state: 'pending' },
-    ]
-  },
-  {
-    id: 'INC-9044',
-    severity: 'P3',
-    service: 'payment-service',
-    title: 'Connection Pool Exhaustion',
-    status: 'BLOCKED',
-    startTime: '09:05:12',
-    duration: 'Ongoing',
-    confidence: { diagnosis: 45, action: 30 },
-    autonomy: 'FULL_AUTONOMY',
-    blockedReason: 'BLOCKED_LOW_CONFIDENCE',
-    timeline: [
-      { step: 'Anomaly Detected', time: '09:05:12', state: 'completed' },
-      { step: 'Evidence Collected', time: '09:05:30', state: 'completed' },
-      { step: 'RCA & Hypothesis Generation', time: '09:06:15', state: 'failed' },
-      { step: 'Safety Check: Low Confidence Veto', time: '09:06:20', state: 'failed' },
-      { step: 'Escalated to Manual Review', time: '09:06:25', state: 'current' },
-    ]
-  }
-];
+// LRU Cache for Detail + Evidence
+class IncidentCache {
+  private cache = new Map<
+    string,
+    { detail: GatewayIncidentDetail; evidence: GatewayEvidenceItem[] }
+  >();
+  private readonly maxSize = 20;
 
-export default function IncidentCenterPage() {
-  const [selectedId, setSelectedId] = useState(mockIncidents[0].id);
-  const selectedIncident = mockIncidents.find(inc => inc.id === selectedId);
-
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'RESOLVED': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
-      case 'EXECUTING': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20';
-      case 'BLOCKED': return 'text-orange-400 bg-orange-400/10 border-orange-400/20';
-      default: return 'text-zinc-400 bg-zinc-800 border-zinc-700';
+  set(id: string, detail: GatewayIncidentDetail, evidence: GatewayEvidenceItem[]) {
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
     }
-  };
+    this.cache.set(id, { detail, evidence });
+  }
+
+  get(id: string) {
+    return this.cache.get(id);
+  }
+}
+const incidentCache = new IncidentCache();
+
+export default function IncidentsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialId = searchParams?.get("id");
+
+  // Gateway live store
+  const storeState = useGatewayStore((state) => ({
+    recentIncidents: state.recentIncidents,
+  }));
+
+  // Local state
+  const [list, setList] = useState<GatewayIncidentItem[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingList, setIsLoadingList] = useState(true);
+
+  // Filters
+  const [serviceFilter, setServiceFilter] = useState<string>("ALL");
+  const [severityFilter, setSeverityFilter] = useState<string>("ALL");
+
+  // Selection state
+  const [selectedId, setSelectedId] = useState<string | null>(initialId || null);
+  const [detail, setDetail] = useState<GatewayIncidentDetail | null>(null);
+  const [evidence, setEvidence] = useState<GatewayEvidenceItem[]>([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Combine live store updates with loaded REST history
+  const displayList = useMemo(() => {
+    const map = new Map<string, GatewayIncidentItem>();
+    // Seed with REST data
+    list.forEach((inc) => map.set(inc.id, inc));
+    // Overlay live SSE updates (which are newer)
+    storeState.recentIncidents.forEach((inc) => map.set(inc.id, inc));
+    // Sort by latestTimestamp desc
+    return Array.from(map.values()).sort((a, b) => {
+      const ta = a.latestTimestamp || a.earliestTimestamp || "";
+      const tb = b.latestTimestamp || b.earliestTimestamp || "";
+      return tb.localeCompare(ta);
+    });
+  }, [list, storeState.recentIncidents]);
+
+  // Derived filter options from live data
+  const uniqueServices = useMemo(
+    () => Array.from(new Set(displayList.map((i) => i.targetService))).sort(),
+    [displayList]
+  );
+  
+  // Filter list client-side based on dropdowns
+  const filteredList = useMemo(() => {
+    return displayList.filter((inc) => {
+      if (serviceFilter !== "ALL" && inc.targetService !== serviceFilter) return false;
+      if (severityFilter !== "ALL" && inc.severity !== severityFilter) return false;
+      return true;
+    });
+  }, [displayList, serviceFilter, severityFilter]);
+
+  // Load List
+  const loadList = useCallback(
+    async (offset = 0, isAppend = false) => {
+      try {
+        if (!isAppend) setIsLoadingList(true);
+        const res = await fetchGatewayIncidents({
+          limit: 50,
+          offset,
+          service: serviceFilter !== "ALL" ? serviceFilter : undefined,
+          severity: severityFilter !== "ALL" ? severityFilter : undefined,
+        });
+        setList((prev) => (isAppend ? [...prev, ...res.data] : res.data));
+        setHasMore(res.hasMore);
+        setNextOffset(res.nextOffset);
+      } catch (err) {
+        console.error("Failed to fetch incidents:", err);
+      } finally {
+        setIsLoadingList(false);
+      }
+    },
+    [serviceFilter, severityFilter]
+  );
+
+  // Initial load / Filter change
+  useEffect(() => {
+    loadList(0, false);
+  }, [loadList]);
+
+  // Load Detail + Evidence
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      setEvidence([]);
+      setDetailError(null);
+      return;
+    }
+
+    const loadDetail = async () => {
+      setDetailError(null);
+      const cached = incidentCache.get(selectedId);
+      
+      // If we have a cached version, display it immediately
+      if (cached) {
+        setDetail(cached.detail);
+        setEvidence(cached.evidence);
+        setIsLoadingDetail(false);
+      } else {
+        setIsLoadingDetail(true);
+      }
+
+      try {
+        const [detRes, evRes] = await Promise.all([
+          fetchGatewayIncidentDetail(selectedId),
+          fetchGatewayIncidentEvidence(selectedId).catch(() => ({ evidence: [] as GatewayEvidenceItem[] }) as any),
+        ]);
+        
+        setDetail(detRes);
+        setEvidence(evRes.evidence || []);
+        incidentCache.set(selectedId, detRes, evRes.evidence || []);
+      } catch (err) {
+        console.error("Failed to load detail", err);
+        if (!cached) setDetailError("Incident not found or unavailable.");
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    };
+    loadDetail();
+    
+    // Update URL without reloading page
+    router.replace(`/incidents?id=${selectedId}`, { scroll: false });
+  }, [selectedId, router]);
+
+  // Watch for live SSE updates to the currently selected incident
+  useEffect(() => {
+    if (!selectedId || !detail) return;
+    const liveUpdate = storeState.recentIncidents.find(inc => inc.id === selectedId);
+    if (liveUpdate && (liveUpdate.latestTimestamp !== detail.latestTimestamp || liveUpdate.occurrenceCount !== detail.occurrenceCount)) {
+      // Background refresh detail
+      fetchGatewayIncidentDetail(selectedId).then(detRes => {
+        setDetail(detRes);
+        incidentCache.set(selectedId, detRes, evidence);
+      }).catch(console.error);
+    }
+  }, [storeState.recentIncidents, selectedId]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto h-[calc(100vh-6rem)] flex flex-col">
-      
-      {/* Header & Search (6.2, 6.3) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-800 pb-4 gap-4 shrink-0">
+    <div className="max-w-[1600px] mx-auto h-[calc(100vh-6rem)] flex flex-col relative overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-4 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-zinc-100 tracking-tight">Incident Center</h1>
-          <p className="text-sm text-zinc-500 mt-1">Canonical record and unified lifecycle timeline.</p>
+          <p className="text-sm text-zinc-500 mt-1">Live event observations and telemetry evidence.</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="Search incidents, traces, logs..." 
-              className="bg-zinc-900 border border-zinc-800 rounded-md pl-9 pr-4 py-2 text-sm text-zinc-300 focus:outline-none focus:border-zinc-600 w-64"
-            />
+        <div className="flex gap-3">
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5">
+            <Filter className="w-4 h-4 text-zinc-400" />
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              className="bg-transparent text-sm text-zinc-300 outline-none border-none"
+            >
+              <option value="ALL">All Severities</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
           </div>
-          <button className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filters
-          </button>
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5">
+            <Server className="w-4 h-4 text-zinc-400" />
+            <select
+              value={serviceFilter}
+              onChange={(e) => setServiceFilter(e.target.value)}
+              className="bg-transparent text-sm text-zinc-300 outline-none border-none"
+            >
+              <option value="ALL">All Services</option>
+              {uniqueServices.map((svc) => (
+                <option key={svc} value={svc}>{svc}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow min-h-0">
-        
-        {/* LEFT COLUMN: Incident List (6.1) */}
-        <div className="lg:col-span-1 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col overflow-hidden">
+      <div className="flex flex-1 gap-6 mt-6 min-h-0">
+        {/* Left Column: Incident List */}
+        <div className="w-1/3 flex flex-col bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden min-h-0 relative">
           <div className="p-4 border-b border-zinc-800 bg-zinc-950/50 flex justify-between items-center shrink-0">
-            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">History</h2>
-            <span className="text-xs text-zinc-500 font-mono">3 Records</span>
+            <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Observed Incidents
+            </h2>
+            <span className="text-xs text-zinc-500 font-mono">{filteredList.length} shown</span>
           </div>
-          
-          <div className="flex-grow overflow-y-auto p-2 space-y-2">
-            {mockIncidents.map((incident) => (
-              <button 
-                key={incident.id}
-                onClick={() => setSelectedId(incident.id)}
-                className={`w-full text-left p-4 rounded-lg border transition-all ${
-                  selectedId === incident.id 
-                    ? 'bg-zinc-800/50 border-zinc-600' 
-                    : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                      incident.severity === 'P1' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 
-                      incident.severity === 'P2' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' : 
-                      'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                    }`}>
-                      {incident.severity}
-                    </span>
-                    <span className="text-sm font-mono text-zinc-400">{incident.id}</span>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {isLoadingList && filteredList.length === 0 ? (
+              <div className="flex justify-center py-10">
+                <Activity className="w-6 h-6 animate-spin text-zinc-600" />
+              </div>
+            ) : filteredList.length === 0 ? (
+              <div className="text-center py-10 text-zinc-500 text-sm">No incidents match criteria.</div>
+            ) : (
+              filteredList.map((inc) => {
+                const uiModel = toIncidentDisplayModel(inc);
+                const isSelected = selectedId === inc.id;
+
+                return (
+                  <div
+                    key={inc.id}
+                    onClick={() => setSelectedId(inc.id)}
+                    className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-zinc-800 border-zinc-600 shadow-md"
+                        : "bg-zinc-950 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                          uiModel.severity === "CRITICAL" || uiModel.severity === "P1"
+                            ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                            : uiModel.severity === "HIGH" || uiModel.severity === "P2"
+                            ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+                            : "bg-zinc-800 text-zinc-400"
+                        }`}
+                      >
+                        {uiModel.severity}
+                      </span>
+                      <span className="text-xs font-mono text-zinc-500">{uiModel.timestamp || "—"}</span>
+                    </div>
+                    <div className="font-mono text-sm leading-tight text-zinc-200 mb-2 truncate">
+                      {uiModel.title}
+                    </div>
+                    <div className="flex justify-between items-center text-xs text-zinc-500 font-mono">
+                      <span>{uiModel.service}</span>
+                      <span className="flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {inc.occurrenceCount}x
+                      </span>
+                    </div>
                   </div>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border uppercase tracking-wider ${getStatusColor(incident.status)}`}>
-                    {incident.status}
-                  </span>
-                </div>
-                <h3 className="text-sm font-bold text-zinc-200 mb-1 truncate">{incident.title}</h3>
-                <div className="flex items-center justify-between text-xs text-zinc-500">
-                  <span className="flex items-center gap-1"><Server className="w-3 h-3" /> {incident.service}</span>
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {incident.startTime}</span>
-                </div>
+                );
+              })
+            )}
+
+            {hasMore && (
+              <button
+                onClick={() => loadList(nextOffset || 0, true)}
+                className="w-full py-2 mt-2 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 rounded transition-colors"
+              >
+                Load More
               </button>
-            ))}
+            )}
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Detail & Unified Timeline (6.4, 6.5) */}
-        {selectedIncident && (
-          <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col overflow-hidden">
-            
-            {/* Detail Header */}
-            <div className="p-6 border-b border-zinc-800 bg-zinc-950/30 shrink-0">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-3 mb-2">
-                    {selectedIncident.title}
-                  </h2>
-                  <div className="flex gap-4 text-sm text-zinc-400">
-                    <span className="flex items-center gap-1"><Server className="w-4 h-4" /> {selectedIncident.service}</span>
-                    <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> Duration: {selectedIncident.duration}</span>
-                    <span className="flex items-center gap-1"><Activity className="w-4 h-4" /> {selectedIncident.autonomy}</span>
-                  </div>
-                </div>
-                <Link href="/copilot" className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded text-sm transition-colors border border-zinc-700">
-                  Open Investigation
-                </Link>
-              </div>
-
-              {/* Confidence Metrics */}
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-zinc-800">
-                <div>
-                  <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Diagnosis Confidence</div>
-                  <div className={`text-lg font-bold ${selectedIncident.confidence.diagnosis > 80 ? 'text-emerald-400' : 'text-orange-400'}`}>
-                    {selectedIncident.confidence.diagnosis}%
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Action Confidence</div>
-                  <div className={`text-lg font-bold ${selectedIncident.confidence.action > 80 ? 'text-emerald-400' : 'text-orange-400'}`}>
-                    {selectedIncident.confidence.action}%
-                  </div>
-                </div>
-                {selectedIncident.blockedReason && (
+        {/* Right Column: Detail & Evidence View */}
+        <div className="w-2/3 flex flex-col bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden min-h-0">
+          {!selectedId ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
+              <Search className="w-12 h-12 mb-4 text-zinc-800" />
+              <p>Select an incident to view captured context and evidence.</p>
+            </div>
+          ) : isLoadingDetail ? (
+             <div className="flex-1 flex items-center justify-center text-zinc-500">
+               <Activity className="w-8 h-8 animate-spin" />
+             </div>
+          ) : detailError ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-red-400">
+              <ShieldAlert className="w-12 h-12 mb-4" />
+              <p>{detailError}</p>
+            </div>
+          ) : detail ? (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Detail Header */}
+              <div className="p-6 border-b border-zinc-800 bg-zinc-950/50 shrink-0">
+                <div className="flex justify-between items-start mb-4">
                   <div>
-                    <div className="text-xs text-orange-500/80 uppercase tracking-wider mb-1">Safety Veto Triggered</div>
-                    <div className="text-xs font-mono font-bold text-orange-400 bg-orange-400/10 border border-orange-400/20 px-2 py-1 rounded inline-block">
-                      {selectedIncident.blockedReason}
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-mono text-zinc-500">{detail.id}</span>
+                      <span className="px-2 py-0.5 text-[10px] bg-zinc-800 text-zinc-400 rounded uppercase">
+                        {detail.freshness}
+                      </span>
                     </div>
+                    <h2 className="text-xl font-mono text-zinc-100 mb-1">
+                      {toIncidentDisplayModel(detail).title}
+                    </h2>
+                    <p className="text-sm text-zinc-400">Target Service: {detail.targetService}</p>
                   </div>
-                )}
+                  <Link
+                    href={`/copilot?incident=${detail.id}`}
+                    className="flex items-center gap-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 px-4 py-2 rounded border border-indigo-500/30 transition-colors text-sm font-medium"
+                  >
+                    Open Investigation
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </div>
+                
+                <div className="grid grid-cols-4 gap-4 mt-6">
+                  <div className="bg-zinc-900 border border-zinc-800 rounded p-3">
+                    <p className="text-xs text-zinc-500 mb-1">Severity / Priority</p>
+                    <p className="text-sm font-mono text-zinc-200">
+                      {detail.severity} / {detail.priorityScore !== null ? detail.priorityScore.toFixed(2) : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded p-3">
+                    <p className="text-xs text-zinc-500 mb-1">Occurrences</p>
+                    <p className="text-sm font-mono text-zinc-200">{detail.occurrenceCount}</p>
+                  </div>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded p-3">
+                    <p className="text-xs text-zinc-500 mb-1">First Observed</p>
+                    <p className="text-sm font-mono text-zinc-200 truncate">
+                      {detail.earliestTimestamp ? detail.earliestTimestamp.split("T")[1]?.slice(0, 8) : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded p-3">
+                    <p className="text-xs text-zinc-500 mb-1">Latest Observed</p>
+                    <p className="text-sm font-mono text-zinc-200 truncate">
+                      {detail.latestTimestamp ? detail.latestTimestamp.split("T")[1]?.slice(0, 8) : "—"}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Unified Timeline (6.5) */}
-            <div className="flex-grow overflow-y-auto p-6 bg-[#09090b]">
-              <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-6 flex items-center gap-2">
-                <GitCommit className="w-4 h-4 text-zinc-500" /> Execution Trace
-              </h3>
-              
-              <div className="relative pl-6 space-y-8 border-l border-zinc-800 ml-3">
-                {selectedIncident.timeline.map((event, idx) => (
-                  <div key={idx} className="relative">
-                    {/* Timeline Node Marker */}
-                    <div className={`absolute -left-[30px] w-4 h-4 rounded-full border-2 bg-[#09090b] ${
-                      event.state === 'completed' ? 'border-emerald-500 bg-emerald-500/20' :
-                      event.state === 'current' ? 'border-cyan-500 bg-cyan-500/20 animate-pulse' :
-                      event.state === 'failed' ? 'border-orange-500 bg-orange-500/20' :
-                      'border-zinc-700 bg-zinc-900'
-                    }`} />
-                    
-                    <div className="flex flex-col -mt-1.5">
-                      <div className="flex items-center gap-3">
-                        <span className={`text-sm font-bold ${
-                          event.state === 'completed' ? 'text-emerald-400' :
-                          event.state === 'current' ? 'text-cyan-400' :
-                          event.state === 'failed' ? 'text-orange-400' :
-                          'text-zinc-500'
-                        }`}>
-                          {event.step}
-                        </span>
-                        {event.state === 'current' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-wider">Active</span>
-                        )}
-                      </div>
-                      <span className="text-xs font-mono text-zinc-600 mt-1">{event.time}</span>
+              {/* Detail Body (Scrollable) */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                
+                {/* System & Topology Context */}
+                <div className="grid grid-cols-2 gap-6">
+                  <section>
+                    <h3 className="text-xs font-semibold uppercase text-zinc-500 mb-3 flex items-center gap-2">
+                      <Network className="w-4 h-4" /> System Context
+                    </h3>
+                    <div className="space-y-4 text-sm border border-zinc-800 rounded bg-zinc-950 p-4">
+                      <div className="flex flex-col gap-1"><span className="text-zinc-500 text-xs uppercase">Environment</span><span className="text-zinc-300 leading-relaxed">{detail.systemContext?.environment || "—"}</span></div>
+                      <div className="flex flex-col gap-1"><span className="text-zinc-500 text-xs uppercase">Health Score at Capture</span><span className="text-zinc-300 font-mono">{detail.systemContext?.currentHealthScore ?? "—"}</span></div>
+                      <div className="flex flex-col gap-1"><span className="text-zinc-500 text-xs uppercase">Role</span><span className="text-zinc-300 capitalize">{detail.infrastructureTopology?.role || "—"}</span></div>
                     </div>
+                  </section>
+                  <section>
+                    <h3 className="text-xs font-semibold uppercase text-zinc-500 mb-3 flex items-center gap-2">
+                      <Activity className="w-4 h-4" /> Service State
+                    </h3>
+                    <div className="space-y-4 text-sm border border-zinc-800 rounded bg-zinc-950 p-4">
+                      <div className="flex flex-col gap-1"><span className="text-zinc-500 text-xs uppercase">Docker Status</span><span className="text-zinc-300">{detail.serviceHealthStatus?.dockerStatus || "—"}</span></div>
+                      <div className="flex flex-col gap-1"><span className="text-zinc-500 text-xs uppercase">Health Check</span><span className="text-zinc-300">{detail.serviceHealthStatus?.healthCheck || "—"}</span></div>
+                      <div className="flex flex-col gap-1"><span className="text-zinc-500 text-xs uppercase">Dependencies</span><span className="text-zinc-300 truncate max-w-full">{detail.infrastructureTopology?.downstreamDependencies?.join(", ") || "None"}</span></div>
+                    </div>
+                  </section>
+                </div>
+
+                {/* Live Evidence Panel */}
+                <section>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold uppercase text-zinc-100 flex items-center gap-2">
+                      <Database className="w-4 h-4 text-emerald-500" /> Laptop 1 Evidence
+                    </h3>
+                    <span className="text-xs font-mono text-zinc-500">{evidence.length} collected items</span>
                   </div>
-                ))}
+                  
+                  {detail.telemetryEvidence?.logSamples && detail.telemetryEvidence.logSamples.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-xs font-semibold text-zinc-400 mb-2">Log Samples ({detail.telemetryEvidence.logSamples.length})</h4>
+                      <div className="space-y-2">
+                        {detail.telemetryEvidence.logSamples.map((log, idx) => (
+                          <div key={idx} className="bg-zinc-950 border border-zinc-800 rounded p-3 font-mono text-xs text-zinc-300">
+                            <div className="flex gap-3 mb-1 opacity-70">
+                              <span>[{log.timestamp.split("T")[1]?.replace("Z","")}]</span>
+                              <span className={log.level === "ERROR" ? "text-red-400" : "text-amber-400"}>{log.level}</span>
+                              {log.traceId && <span>trace:{log.traceId.slice(0,8)}</span>}
+                            </div>
+                            <div className="break-words whitespace-pre-wrap">{log.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {detail.telemetryEvidence?.metricsSnapshot && detail.telemetryEvidence.metricsSnapshot.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-xs font-semibold text-zinc-400 mb-2">Metrics Snapshot</h4>
+                      <div className="grid grid-cols-3 gap-3">
+                        {detail.telemetryEvidence.metricsSnapshot.slice(0, 3).map((met, idx) => (
+                          <div key={idx} className="bg-zinc-950 border border-zinc-800 rounded p-3 text-center">
+                            <div className="text-[10px] text-zinc-500 font-mono mb-2">{met.timestamp.split("T")[1]?.replace("Z","")}</div>
+                            <div className="flex justify-around">
+                              <div>
+                                <div className="text-xs text-zinc-400">CPU</div>
+                                <div className="font-mono text-zinc-200">{met.cpuPercent.toFixed(1)}%</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-zinc-400">MEM</div>
+                                <div className="font-mono text-zinc-200">{met.memoryUsagePercent.toFixed(1)}%</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {detail.injectedChaosContext?.activeInfrastructureMutations && (
+                    <div className="mb-6">
+                      <h4 className="text-xs font-semibold text-amber-500 mb-2">Captured Chaos Context</h4>
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded p-3 font-mono text-xs text-amber-200/80">
+                        {detail.injectedChaosContext.activeInfrastructureMutations}
+                      </div>
+                    </div>
+                  )}
+
+                  {(!detail.telemetryEvidence?.logSamples?.length && !detail.telemetryEvidence?.metricsSnapshot?.length) && (
+                    <div className="text-center p-8 bg-zinc-950 rounded border border-zinc-800 text-zinc-500 text-sm">
+                      No Laptop 1 evidence recorded for this incident.
+                    </div>
+                  )}
+                </section>
               </div>
             </div>
-            
-          </div>
-        )}
+          ) : null}
+        </div>
       </div>
     </div>
   );

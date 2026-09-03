@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import {
   ReactFlow,
   Background,
@@ -392,9 +393,10 @@ export default function InfrastructurePage() {
           <div className="flex-grow overflow-y-auto p-4 space-y-3">
             {recent && recent.length > 0 ? (
               recent.map((inc) => (
-                <div
+                <Link
                   key={inc.id}
-                  className="p-3 bg-zinc-950 rounded-lg border border-zinc-800 flex items-start gap-3 transition-all hover:border-zinc-700"
+                  href={`/incidents?id=${inc.id}`}
+                  className="p-3 bg-zinc-950 rounded-lg border border-zinc-800 flex items-start gap-3 transition-all hover:border-zinc-700 block"
                 >
                   <span
                     className={`px-2 py-0.5 text-xs font-bold rounded shrink-0 ${
@@ -413,10 +415,10 @@ export default function InfrastructurePage() {
                     </div>
                     <div className="text-xs text-zinc-500 font-mono mt-1 flex justify-between">
                       <span>{inc.service}</span>
-                      <span>{inc.timestamp.split("T")[1]?.slice(0, 8) || inc.timestamp}</span>
+                      <span>{inc.timestamp ? (inc.timestamp.split("T")[1]?.slice(0, 8) || inc.timestamp) : "—"}</span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))
             ) : (
               <div className="h-40 flex flex-col items-center justify-center text-zinc-500 text-xs text-center p-4">

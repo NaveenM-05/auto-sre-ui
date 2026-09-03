@@ -76,7 +76,7 @@ export function useTelemetry(containerName?: string) {
 
 export function useRecentIncidents(): {
   recent: IncidentDisplayModel[];
-  activeCount: number | null;
+  activeCount: number;
   totalCount: number | null;
 } {
   const { rawRecent, activeCount, totalCount } = useGatewayStore((state) => ({
@@ -89,7 +89,7 @@ export function useRecentIncidents(): {
     return (rawRecent || []).map(toIncidentDisplayModel);
   }, [rawRecent]);
 
-  return { recent, activeCount, totalCount };
+  return { recent, activeCount: activeCount && activeCount > 0 ? activeCount : recent.length, totalCount };
 }
 
 export function useReactFlowGraph(): { nodes: Node[]; edges: Edge[] } {

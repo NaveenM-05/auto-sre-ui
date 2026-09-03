@@ -1,4 +1,4 @@
-import {
+﻿import {
   GatewaySystemSnapshot,
   UiHealthResponse,
   UiPipelineResponse,
@@ -6,16 +6,15 @@ import {
   GatewayInfrastructureService,
   GatewayInfrastructureDetail,
   GatewayTopologyGraph,
+  GatewayIncidentListResponse,
+  GatewayIncidentDetail,
+  GatewayIncidentEvidenceResponse,
 } from "./types";
 
 const PROXY_BASE = "/api/gateway";
 
 export class GatewayApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public code?: string
-  ) {
+  constructor(message: string, public status: number, public code?: string) {
     super(message);
     this.name = "GatewayApiError";
   }
@@ -28,7 +27,6 @@ async function fetchJson<T>(path: string): Promise<T> {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
-
   if (!res.ok) {
     let errCode: string | undefined;
     let errMsg = `Request to ${path} failed with status ${res.status}`;
@@ -39,7 +37,6 @@ async function fetchJson<T>(path: string): Promise<T> {
     } catch {}
     throw new GatewayApiError(errMsg, res.status, errCode);
   }
-
   return (await res.json()) as T;
 }
 
@@ -63,12 +60,37 @@ export async function fetchGatewayInfrastructure(): Promise<GatewayInfrastructur
   return fetchJson<GatewayInfrastructureService[]>("/infrastructure");
 }
 
-export async function fetchGatewayServiceDetail(
-  serviceId: string
-): Promise<GatewayInfrastructureDetail> {
+export async function fetchGatewayServiceDetail(serviceId: string): Promise<GatewayInfrastructureDetail> {
   return fetchJson<GatewayInfrastructureDetail>(`/infrastructure/${encodeURIComponent(serviceId)}`);
 }
 
 export async function fetchGatewayTopology(): Promise<GatewayTopologyGraph> {
   return fetchJson<GatewayTopologyGraph>("/topology");
+}
+
+export async function fetchGatewayIncidents(params?: {
+  limit?: number;
+  offset?: number;
+  cursor?: number;
+  service?: string;
+  severity?: string;
+  since?: string;
+}): Promise<GatewayIncidentListResponse> {
+  const qs = new URLSearchParams();
+  if (params?.limit != null) qs.set("limit", params.limit.toString());
+  if (params?.offset != null) qs.set("offset", params.offset.toString());
+  if (params?.cursor != null) qs.set("cursor", params.cursor.toString());
+  if (params?.service) qs.set("service", params.service);
+  if (params?.severity) qs.set("severity", params.severity);
+  if (params?.since) qs.set("since", params.since);
+  const q = qs.toString();
+  return fetchJson<GatewayIncidentListResponse>("/incidents" + (q ? "?" + q : ""));
+}
+
+export async function fetchGatewayIncidentDetail(id: string): Promise<GatewayIncidentDetail> {
+  return fetchJson<GatewayIncidentDetail>("/incidents/" + encodeURIComponent(id));
+}
+
+export async function fetchGatewayIncidentEvidence(id: string): Promise<GatewayIncidentEvidenceResponse> {
+  return fetchJson<GatewayIncidentEvidenceResponse>("/incidents/" + encodeURIComponent(id) + "/evidence");
 }

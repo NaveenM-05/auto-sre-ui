@@ -161,6 +161,87 @@ export interface GatewayIncidentItem {
   metricsSnapshotCount: number;
 }
 
+export interface GatewayIncidentListResponse {
+  data: GatewayIncidentItem[];
+  total: number;
+  count: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  nextOffset: number | null;
+  source: string;
+  generatedAt: string | null;
+  servedAt: string;
+  freshness: FreshnessClassification;
+}
+
+export interface GatewayIncidentDetail extends GatewayIncidentItem {
+  id: string;
+  targetService: string;
+  severity: string;
+  priorityScore: number | null;
+  occurrenceCount: number;
+  earliestTimestamp: string | null;
+  latestTimestamp: string | null;
+  systemContext: {
+    objective: string | null;
+    environment: string | null;
+    currentHealthScore: number | null;
+    activeWarnings: number;
+  };
+  infrastructureTopology: {
+    role: string | null;
+    downstreamDependencies: string[];
+    exposedPorts: string[];
+  };
+  serviceHealthStatus: {
+    dockerStatus: string | null;
+    healthCheck: string | null;
+    dependencyStates: Record<string, any>;
+  };
+  telemetryEvidence?: {
+    logSamples: Array<{
+      timestamp: string;
+      level: string;
+      content: string;
+      traceId?: string;
+    }>;
+    metricsSnapshot: Array<{
+      timestamp: string;
+      cpuPercent: number;
+      memoryUsagePercent: number;
+    }>;
+  };
+  injectedChaosContext?: {
+    activeInfrastructureMutations: string;
+  };
+  source: string;
+  generatedAt: string | null;
+  servedAt: string;
+  freshness: FreshnessClassification;
+}
+
+export interface GatewayEvidenceItem {
+  evidenceId: string;
+  type: string;
+  timestamp: string | null;
+  service: string;
+  summary: string;
+  value: any;
+  source: string;
+  metadata: Record<string, any>;
+}
+
+export interface GatewayIncidentEvidenceResponse {
+  incidentId: string;
+  evidence: GatewayEvidenceItem[];
+  count: number;
+  source: string;
+  generatedAt: string | null;
+  servedAt: string;
+  freshness: FreshnessClassification;
+}
+
 export interface GatewaySystemSnapshot {
   laptop1: UiHealthResponse;
   pipeline: UiPipelineResponse;

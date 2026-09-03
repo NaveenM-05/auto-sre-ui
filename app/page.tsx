@@ -85,10 +85,10 @@ export default function MissionControl() {
           </div>
         </div>
 
-        {/* Active Incidents (Real) */}
+        {/* Recent Incidents (Real) */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between">
           <div className="flex justify-between items-start mb-4">
-            <span className="text-zinc-400 text-sm font-medium">Active Incidents</span>
+            <span className="text-zinc-400 text-sm font-medium">Recent Incidents</span>
             <ShieldAlert
               className={`w-5 h-5 ${
                 (activeCount ?? 0) > 0 ? "text-red-500 animate-pulse" : "text-zinc-600"
@@ -163,7 +163,7 @@ export default function MissionControl() {
                     </h3>
                   </div>
                   <Link
-                    href="/incidents"
+                    href={topIncident ? `/incidents?id=${topIncident.id}` : "/incidents"}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2 rounded text-sm transition-colors font-medium border border-zinc-700"
                   >
                     View Incidents
@@ -202,7 +202,7 @@ export default function MissionControl() {
           ) : (
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
               <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-              <p className="font-medium text-zinc-300">No active incidents</p>
+              <p className="font-medium text-zinc-300">No recent incidents</p>
               <p className="text-xs text-zinc-500 mt-1">
                 Laptop 1 anomaly detection reports all services operational.
               </p>
