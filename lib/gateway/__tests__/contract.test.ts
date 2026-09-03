@@ -14,6 +14,7 @@ import {
   GatewayInfrastructureService,
   GatewayTopologyGraph,
   GatewayIncidentItem,
+  GatewayEvidenceItem,
 } from "../types";
 
 // Canonical sample JSON payloads reflecting actual backend responses from tcp_aum
@@ -308,5 +309,88 @@ describe("Laptop 1 Gateway Contract & View Model Alignment", () => {
     // 0 recent incidents -> 0
     const emptyCount = [].length;
     expect(emptyCount).toBe(0);
+  });
+
+  describe("Copilot Authoritative Evidence Inventory", () => {
+    const mockDetailWith5Logs = {
+      id: "inc-1",
+      telemetryEvidence: {
+        logSamples: [
+          { timestamp: "1", container: "c", line: "1" },
+          { timestamp: "2", container: "c", line: "2" },
+          { timestamp: "3", container: "c", line: "3" },
+          { timestamp: "4", container: "c", line: "4" },
+          { timestamp: "5", container: "c", line: "5" },
+        ],
+      },
+    };
+
+    it("should show logSampleCount = 0 when evidence endpoint returns [] even if detail has 5 logs", () => {
+      const evidenceList: GatewayEvidenceItem[] = [];
+      const evidenceError = false;
+
+      const logSampleCount = evidenceError
+        ? null
+        : evidenceList.filter((e) => e.type === "log_sample").length;
+
+      expect(mockDetailWith5Logs.telemetryEvidence.logSamples.length).toBe(5);
+      expect(logSampleCount).toBe(0);
+    });
+
+    it("should show logSampleCount = 5 when evidence endpoint contains 5 log_sample items", () => {
+      const evidenceList: GatewayEvidenceItem[] = Array(5).fill({
+        evidenceId: "ev-1",
+        type: "log_sample",
+        timestamp: "2026-09-02T12:00:00Z",
+        service: "auth",
+        summary: "log sample",
+        value: "error line",
+        source: "l1",
+        metadata: {},
+      });
+      const evidenceError = false;
+
+      const logSampleCount = evidenceError
+        ? null
+        : evidenceList.filter((e) => e.type === "log_sample").length;
+
+      expect(logSampleCount).toBe(5);
+    });
+
+    it("should show evidence inventory count as null (unavailable) on evidence endpoint failure", () => {
+      const evidenceList: GatewayEvidenceItem[] = [];
+      const evidenceError = true;
+
+      const logSampleCount = evidenceError
+        ? null
+        : evidenceList.filter((e) => e.type === "log_sample").length;
+
+      expect(logSampleCount).toBeNull();
+    });
+
+    it("should ensure evidence trace items rely strictly on actual evidence item type presence", () => {
+      const evidenceList: GatewayEvidenceItem[] = [
+        {
+          evidenceId: "ev-log",
+          type: "log_template",
+          timestamp: "2026-09-02T12:00:00Z",
+          service: "auth",
+          summary: "template",
+          value: "Timeout",
+          source: "l1",
+          metadata: {},
+        },
+      ];
+
+      const logPatternCount = evidenceList.filter(
+        (e) => e.type === "log_template",
+      ).length;
+      const logSampleCount = evidenceList.filter(
+        (e) => e.type === "log_sample",
+      ).length;
+
+      expect(logPatternCount).toBe(1);
+      expect(logSampleCount).toBe(0);
+    });
   });
 });

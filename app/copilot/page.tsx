@@ -32,7 +32,6 @@ import {
   formatTriState,
   toIncidentDisplayModel,
 } from "@/lib/gateway/view-models";
-import { STATIC_ENGINE_REGISTRY } from "@/lib/engines/registry";
 import { EngineStatusCard } from "@/components/engines/EngineStatusCard";
 import { useLaptop1Health } from "@/lib/gateway/selectors";
 
@@ -78,33 +77,22 @@ function CopilotInvestigationContent() {
     loadData();
   }, [loadData]);
 
-  // Derived evidence inventory counts from actual GatewayEvidenceItem[] or fallback to incident telemetry
+  // Derived evidence inventory counts exclusively from GatewayEvidenceItem[]
   const logPatternCount = evidenceError
     ? null
-    : evidence.filter(
-        (e) => e.type === "log_template" || e.type === "log_cluster",
-      ).length || (incident?.logClusterTemplate ? 1 : 0);
+    : evidence.filter((e) => e.type === "log_template").length;
 
   const logSampleCount = evidenceError
     ? null
-    : evidence.filter((e) => e.type === "log_sample" || e.type === "log")
-        .length ||
-      incident?.telemetryEvidence?.logSamples?.length ||
-      0;
+    : evidence.filter((e) => e.type === "log_sample").length;
 
   const metricSnapshotCount = evidenceError
     ? null
-    : evidence.filter(
-        (e) => e.type === "metric_snapshot" || e.type === "metric",
-      ).length ||
-      incident?.telemetryEvidence?.metricsSnapshot?.length ||
-      0;
+    : evidence.filter((e) => e.type === "metric_snapshot").length;
 
   const chaosContextCount = evidenceError
     ? null
-    : evidence.filter((e) => e.type === "chaos_context" || e.type === "chaos")
-        .length ||
-      (incident?.injectedChaosContext?.activeInfrastructureMutations ? 1 : 0);
+    : evidence.filter((e) => e.type === "chaos_context").length;
 
   return (
     <div className="max-w-[1600px] mx-auto h-[calc(100vh-6rem)] flex flex-col min-w-0">
