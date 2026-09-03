@@ -23,7 +23,7 @@ export default function GlobalHeader() {
   const { connection, freshness, sourceGeneratedAt, lastEventReceivedAt } =
     useLaptop1Connection();
   const { health, pipeline } = useLaptop1Health();
-  const { activeCount, recent } = useRecentIncidents();
+  const { recent } = useRecentIncidents();
   const summary = useSystemSummary();
 
   const [timeAgo, setTimeAgo] = useState<string>("");
@@ -135,7 +135,7 @@ export default function GlobalHeader() {
   };
 
   const freshnessBadge = getFreshnessBadge();
-  const effectiveActiveIncidents = activeCount;
+  const recentCount = recent ? recent.length : 0;
 
   const appMode = process.env.NEXT_PUBLIC_APP_MODE || "DEVELOPMENT";
 
@@ -207,20 +207,19 @@ export default function GlobalHeader() {
         {/* Recent Incidents Badge */}
         <div
           className={`ml-4 flex items-center gap-2 px-3 py-1 rounded-full border ${
-            effectiveActiveIncidents && effectiveActiveIncidents > 0
+            recentCount > 0
               ? "bg-red-500/10 border-red-500/20 text-red-400"
               : "bg-zinc-900 border-zinc-800 text-zinc-400"
           }`}
         >
-          {effectiveActiveIncidents && effectiveActiveIncidents > 0 ? (
+          {recentCount > 0 ? (
             <>
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
               <span className="font-bold">
-                {effectiveActiveIncidents} RECENT INCIDENT
-                {effectiveActiveIncidents > 1 ? "S" : ""}
+                {recentCount} RECENT INCIDENT{recentCount > 1 ? "S" : ""}
               </span>
             </>
           ) : (

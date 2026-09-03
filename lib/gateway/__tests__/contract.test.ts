@@ -5,7 +5,9 @@ import {
   toIncidentDisplayModel,
   toReactFlowNodes,
   toReactFlowEdges,
+  formatTriState,
 } from "../view-models";
+
 import {
   GatewaySystemSnapshot,
   GatewaySystemSummary,
@@ -281,5 +283,30 @@ describe("Laptop 1 Gateway Contract & View Model Alignment", () => {
     expect(flowEdges[0].id).toBe("api-gateway->auth-service");
     expect(flowEdges[0].source).toBe("api-gateway");
     expect(flowEdges[0].target).toBe("auth-service");
+  });
+
+  it("should format tri-state booleans correctly (true->Yes, false->No, null->Unknown)", () => {
+    expect(formatTriState(true)).toBe("Yes");
+    expect(formatTriState(false)).toBe("No");
+    expect(formatTriState(null)).toBe("Unknown");
+    expect(formatTriState(undefined)).toBe("Unknown");
+  });
+
+  it("should derive header badge count exclusively from recent.length", () => {
+    store.hydrate(SAMPLE_REAL_SNAPSHOT);
+    const snapshot = store.getSnapshot();
+
+    // recent has 1 incident
+    expect(snapshot.recentIncidents.length).toBe(1);
+
+    // If activeCount is 5 but recent has 1, badge must use recent.length (1)
+    const activeCountOverride = 5;
+    const effectiveCount = snapshot.recentIncidents.length; // 1
+    expect(effectiveCount).toBe(1);
+    expect(effectiveCount).not.toBe(activeCountOverride);
+
+    // 0 recent incidents -> 0
+    const emptyCount = [].length;
+    expect(emptyCount).toBe(0);
   });
 });

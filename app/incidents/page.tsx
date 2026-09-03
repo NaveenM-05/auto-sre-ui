@@ -203,12 +203,13 @@ function IncidentsPageContent() {
 
         try {
           const evRes = await fetchGatewayIncidentEvidence(selectedId);
-          setEvidence(evRes.evidence || []);
+          const evList = evRes.evidence || [];
+          setEvidence(evList);
           setEvidenceError(false);
-          incidentCache.set(selectedId, detRes, evRes.evidence || []);
+          incidentCache.set(selectedId, detRes, evList);
         } catch {
-          setEvidence([]);
           setEvidenceError(true);
+          // Preserve previous cached/loaded evidence if present, do not clear to []
         }
       } catch (err) {
         console.error("Failed to load detail", err);
@@ -234,20 +235,23 @@ function IncidentsPageContent() {
       (liveUpdate.latestTimestamp !== detail.latestTimestamp ||
         liveUpdate.occurrenceCount !== detail.occurrenceCount)
     ) {
-      const timeoutId = setTimeout(() => {
-        // Background refresh detail
-        Promise.all([
-          fetchGatewayIncidentDetail(selectedId),
-          fetchGatewayIncidentEvidence(selectedId).catch(
-            () => ({ evidence: [] as GatewayEvidenceItem[] }) as any,
-          ),
-        ])
-          .then(([detRes, evRes]) => {
-            setDetail(detRes);
-            setEvidence(evRes.evidence || []);
-            incidentCache.set(selectedId, detRes, evRes.evidence || []);
-          })
-          .catch(console.error);
+      const timeoutId = setTimeout(async () => {
+        try {
+          const detRes = await fetchGatewayIncidentDetail(selectedId);
+          setDetail(detRes);
+          try {
+            const evRes = await fetchGatewayIncidentEvidence(selectedId);
+            const evList = evRes.evidence || [];
+            setEvidence(evList);
+            setEvidenceError(false);
+            incidentCache.set(selectedId, detRes, evList);
+          } catch {
+            setEvidenceError(true);
+            // Preserve previous good evidence, do not overwrite with [] or cache failed request
+          }
+        } catch (err) {
+          console.error("Live detail update failed:", err);
+        }
       }, 300);
 
       return () => clearTimeout(timeoutId);

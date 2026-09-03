@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -17,7 +17,9 @@ import {
   Cpu,
   Layers,
   Send,
+  XCircle,
 } from "lucide-react";
+
 import {
   fetchGatewayIncidentDetail,
   fetchGatewayIncidentEvidence,
@@ -26,7 +28,10 @@ import {
   GatewayIncidentDetail,
   GatewayEvidenceItem,
 } from "@/lib/gateway/types";
-import { toIncidentDisplayModel } from "@/lib/gateway/view-models";
+import {
+  formatTriState,
+  toIncidentDisplayModel,
+} from "@/lib/gateway/view-models";
 import { STATIC_ENGINE_REGISTRY } from "@/lib/engines/registry";
 import { EngineStatusCard } from "@/components/engines/EngineStatusCard";
 import { useLaptop1Health } from "@/lib/gateway/selectors";
@@ -39,42 +44,67 @@ function CopilotInvestigationContent() {
 
   const [incident, setIncident] = useState<GatewayIncidentDetail | null>(null);
   const [evidence, setEvidence] = useState<GatewayEvidenceItem[]>([]);
+  const [evidenceError, setEvidenceError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!incidentId) return;
-    const load = async () => {
-      setIsLoading(true);
-      setError(null);
+    setIsLoading(true);
+    setError(null);
+    setEvidenceError(false);
+
+    try {
+      const detRes = await fetchGatewayIncidentDetail(incidentId);
+      setIncident(detRes);
+
       try {
-        const [detRes, evRes] = await Promise.all([
-          fetchGatewayIncidentDetail(incidentId),
-          fetchGatewayIncidentEvidence(incidentId).catch(
-            () => ({ evidence: [] as GatewayEvidenceItem[] }) as any,
-          ),
-        ]);
-        setIncident(detRes);
+        const evRes = await fetchGatewayIncidentEvidence(incidentId);
         setEvidence(evRes.evidence || []);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load incident investigation context.");
-      } finally {
-        setIsLoading(false);
+        setEvidenceError(false);
+      } catch {
+        setEvidence([]);
+        setEvidenceError(true);
       }
-    };
-    load();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load incident investigation context.");
+    } finally {
+      setIsLoading(false);
+    }
   }, [incidentId]);
 
-  const logPatternCount = incident?.logClusterTemplate ? 1 : 0;
-  const logSampleCount = incident?.telemetryEvidence?.logSamples?.length || 0;
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const metricSnapshotCount =
-    incident?.telemetryEvidence?.metricsSnapshot?.length || 0;
-  const chaosContextCount = incident?.injectedChaosContext
-    ?.activeInfrastructureMutations
-    ? 1
-    : 0;
+  // Derived evidence inventory counts from actual GatewayEvidenceItem[] or fallback to incident telemetry
+  const logPatternCount = evidenceError
+    ? null
+    : evidence.filter(
+        (e) => e.type === "log_template" || e.type === "log_cluster",
+      ).length || (incident?.logClusterTemplate ? 1 : 0);
+
+  const logSampleCount = evidenceError
+    ? null
+    : evidence.filter((e) => e.type === "log_sample" || e.type === "log")
+        .length ||
+      incident?.telemetryEvidence?.logSamples?.length ||
+      0;
+
+  const metricSnapshotCount = evidenceError
+    ? null
+    : evidence.filter(
+        (e) => e.type === "metric_snapshot" || e.type === "metric",
+      ).length ||
+      incident?.telemetryEvidence?.metricsSnapshot?.length ||
+      0;
+
+  const chaosContextCount = evidenceError
+    ? null
+    : evidence.filter((e) => e.type === "chaos_context" || e.type === "chaos")
+        .length ||
+      (incident?.injectedChaosContext?.activeInfrastructureMutations ? 1 : 0);
 
   return (
     <div className="max-w-[1600px] mx-auto h-[calc(100vh-6rem)] flex flex-col min-w-0">
@@ -95,7 +125,8 @@ function CopilotInvestigationContent() {
           <Terminal className="w-12 h-12 mb-4 text-zinc-800" />
           <p className="text-lg mb-2 text-zinc-400">No Incident Selected</p>
           <p className="mb-6">
-            Choose an observed incident to inspect evidence.
+            Choose an observed incident to inspect its captured context and
+            evidence.
           </p>
           <Link
             href="/incidents"
@@ -149,32 +180,44 @@ function CopilotInvestigationContent() {
               <h2 className="text-sm font-semibold uppercase text-zinc-400 mb-4 flex items-center gap-2">
                 <Layers className="w-4 h-4" /> Evidence Inventory
               </h2>
-              <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-                <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
-                  <span className="text-zinc-400">Log pattern</span>
-                  <span className="text-zinc-100 font-bold">
-                    {logPatternCount}
-                  </span>
+              {evidenceError ? (
+                <div className="bg-zinc-950 border border-red-900/50 rounded p-4 text-xs text-red-400 space-y-3">
+                  <p>Evidence inventory unavailable</p>
+                  <button
+                    onClick={loadData}
+                    className="px-3 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 rounded transition-colors"
+                  >
+                    Retry
+                  </button>
                 </div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
-                  <span className="text-zinc-400">Log samples</span>
-                  <span className="text-zinc-100 font-bold">
-                    {logSampleCount}
-                  </span>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 font-mono text-xs">
+                  <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
+                    <span className="text-zinc-400">Log pattern</span>
+                    <span className="text-zinc-100 font-bold">
+                      {logPatternCount !== null ? logPatternCount : "—"}
+                    </span>
+                  </div>
+                  <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
+                    <span className="text-zinc-400">Log samples</span>
+                    <span className="text-zinc-100 font-bold">
+                      {logSampleCount !== null ? logSampleCount : "—"}
+                    </span>
+                  </div>
+                  <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
+                    <span className="text-zinc-400">Metric snapshots</span>
+                    <span className="text-zinc-100 font-bold">
+                      {metricSnapshotCount !== null ? metricSnapshotCount : "—"}
+                    </span>
+                  </div>
+                  <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
+                    <span className="text-zinc-400">Chaos context</span>
+                    <span className="text-zinc-100 font-bold">
+                      {chaosContextCount !== null ? chaosContextCount : "—"}
+                    </span>
+                  </div>
                 </div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
-                  <span className="text-zinc-400">Metric snapshots</span>
-                  <span className="text-zinc-100 font-bold">
-                    {metricSnapshotCount}
-                  </span>
-                </div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded p-3 flex justify-between items-center">
-                  <span className="text-zinc-400">Chaos context</span>
-                  <span className="text-zinc-100 font-bold">
-                    {chaosContextCount}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Factual Investigation Trace */}
@@ -185,38 +228,54 @@ function CopilotInvestigationContent() {
               <div className="space-y-3 font-mono text-xs">
                 <div className="flex items-center gap-2 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Incident observed</span>
+                  <span>Incident record available</span>
                 </div>
                 <div className="flex items-center gap-2 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Canonical incident created ({incident.id})</span>
+                  <span>Service context captured</span>
                 </div>
-                {logPatternCount > 0 && (
+                {logPatternCount !== null && logPatternCount > 0 && (
                   <div className="flex items-center gap-2 text-emerald-400">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>Log cluster captured</span>
+                    <span>Log pattern captured</span>
                   </div>
                 )}
-                {logSampleCount > 0 && (
+                {logSampleCount !== null && logSampleCount > 0 && (
                   <div className="flex items-center gap-2 text-emerald-400">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>{logSampleCount} log samples recorded</span>
                   </div>
                 )}
-                {metricSnapshotCount > 0 && (
+                {metricSnapshotCount !== null && metricSnapshotCount > 0 && (
                   <div className="flex items-center gap-2 text-emerald-400">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>{metricSnapshotCount} metric snapshots recorded</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Service context captured</span>
-                </div>
-                <div className="flex items-center gap-2 text-amber-500/90">
-                  <HelpCircle className="w-4 h-4 shrink-0" />
-                  <span>Phase 2 readiness unknown</span>
-                </div>
+                {chaosContextCount !== null && chaosContextCount > 0 && (
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>Chaos context captured</span>
+                  </div>
+                )}
+
+                {/* Dynamic Pipeline Phase 2 Readiness Trace Item */}
+                {pipeline?.phase2Ready === true ? (
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>Phase 2 ready</span>
+                  </div>
+                ) : pipeline?.phase2Ready === false ? (
+                  <div className="flex items-center gap-2 text-red-400">
+                    <XCircle className="w-4 h-4 shrink-0" />
+                    <span>Phase 2 not ready</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-amber-500/90">
+                    <HelpCircle className="w-4 h-4 shrink-0" />
+                    <span>Phase 2 readiness unknown</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -229,33 +288,25 @@ function CopilotInvestigationContent() {
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Available</span>
                   <span className="text-zinc-200">
-                    {pipeline?.available != null
-                      ? String(pipeline.available)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.available)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Alive</span>
                   <span className="text-zinc-200">
-                    {pipeline?.alive != null
-                      ? String(pipeline.alive)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.alive)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Ready</span>
                   <span className="text-zinc-200">
-                    {pipeline?.ready != null
-                      ? String(pipeline.ready)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.ready)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Phase 2 Ready</span>
                   <span className="text-zinc-200">
-                    {pipeline?.phase2Ready != null
-                      ? String(pipeline.phase2Ready)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.phase2Ready)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between col-span-2">
@@ -281,41 +332,33 @@ function CopilotInvestigationContent() {
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Contracts Valid</span>
                   <span className="text-zinc-200">
-                    {pipeline?.readiness?.contractsValid != null
-                      ? String(pipeline.readiness.contractsValid)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.readiness?.contractsValid)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Frozen Files Valid</span>
                   <span className="text-zinc-200">
-                    {pipeline?.readiness?.phase2FrozenFilesValid != null
-                      ? String(pipeline.readiness.phase2FrozenFilesValid)
-                      : "Unknown"}
+                    {formatTriState(
+                      pipeline?.readiness?.phase2FrozenFilesValid,
+                    )}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Database Ready</span>
                   <span className="text-zinc-200">
-                    {pipeline?.readiness?.databaseReady != null
-                      ? String(pipeline.readiness.databaseReady)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.readiness?.databaseReady)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Chroma Ready</span>
                   <span className="text-zinc-200">
-                    {pipeline?.readiness?.chromaReady != null
-                      ? String(pipeline.readiness.chromaReady)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.readiness?.chromaReady)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
                   <span className="text-zinc-500">Embedding Warm</span>
                   <span className="text-zinc-200">
-                    {pipeline?.readiness?.embeddingModelWarm != null
-                      ? String(pipeline.readiness.embeddingModelWarm)
-                      : "Unknown"}
+                    {formatTriState(pipeline?.readiness?.embeddingModelWarm)}
                   </span>
                 </div>
                 <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex justify-between">
