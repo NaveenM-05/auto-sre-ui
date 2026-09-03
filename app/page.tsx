@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSystemSummary, useRecentIncidents } from "@/lib/gateway/selectors";
+import { STATIC_ENGINE_REGISTRY } from "@/lib/engines/registry";
 
 export default function MissionControl() {
   const summary = useSystemSummary();
@@ -34,6 +35,8 @@ export default function MissionControl() {
     return "text-red-400";
   };
 
+  const recentIncidentsCount = activeCount ?? recent.length;
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -43,12 +46,12 @@ export default function MissionControl() {
             Mission Control
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Global system overview and active incident summary.
+            Global system overview and recent incident observations.
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-md text-emerald-400 text-sm font-bold">
-          <Zap className="w-4 h-4" />
-          AUTONOMY: FULL
+        <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-md text-zinc-400 text-sm font-bold">
+          <Activity className="w-4 h-4" />
+          MODE: OBSERVE ONLY
         </div>
       </div>
 
@@ -57,11 +60,15 @@ export default function MissionControl() {
         {/* System Health (Real Gateway Data) */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between">
           <div className="flex justify-between items-start mb-4">
-            <span className="text-zinc-400 text-sm font-medium">System Health</span>
+            <span className="text-zinc-400 text-sm font-medium">
+              System Health
+            </span>
             <Activity className={`w-5 h-5 ${getHealthColor(healthScore)}`} />
           </div>
           <div>
-            <div className={`text-3xl font-bold ${getHealthColor(healthScore)}`}>
+            <div
+              className={`text-3xl font-bold ${getHealthColor(healthScore)}`}
+            >
               {healthScore !== null ? `${healthScore.toFixed(0)}%` : "—"}
             </div>
             <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5">
@@ -72,10 +79,14 @@ export default function MissionControl() {
                     {healthyCount}/{totalServices} Healthy
                   </span>
                   {degradedCount > 0 && (
-                    <span className="text-amber-400">· {degradedCount} Degraded</span>
+                    <span className="text-amber-400">
+                      • {degradedCount} Degraded
+                    </span>
                   )}
                   {unhealthyCount > 0 && (
-                    <span className="text-red-400">· {unhealthyCount} Unhealthy</span>
+                    <span className="text-red-400">
+                      • {unhealthyCount} Unhealthy
+                    </span>
                   )}
                 </>
               ) : (
@@ -88,23 +99,27 @@ export default function MissionControl() {
         {/* Recent Incidents (Real) */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between">
           <div className="flex justify-between items-start mb-4">
-            <span className="text-zinc-400 text-sm font-medium">Recent Incidents</span>
+            <span className="text-zinc-400 text-sm font-medium">
+              Recent Incidents
+            </span>
             <ShieldAlert
               className={`w-5 h-5 ${
-                (activeCount ?? 0) > 0 ? "text-red-500 animate-pulse" : "text-zinc-600"
+                recentIncidentsCount > 0
+                  ? "text-red-500 animate-pulse"
+                  : "text-zinc-600"
               }`}
             />
           </div>
           <div>
             <div
               className={`text-3xl font-bold ${
-                (activeCount ?? 0) > 0 ? "text-red-400" : "text-zinc-100"
+                recentIncidentsCount > 0 ? "text-red-400" : "text-zinc-100"
               }`}
             >
-              {activeCount !== null ? activeCount : summary ? summary.activeWarnings : "—"}
+              {recentIncidentsCount}
             </div>
-            <div className="text-xs text-zinc-500 mt-1 font-mono">
-              {summary ? `${summary.activeWarnings} ACTIVE WARNINGS` : "LAPTOP 1 INCIDENTS"}
+            <div className="text-xs text-zinc-500 mt-1 font-mono uppercase">
+              LAPTOP 1 INCIDENTS
             </div>
           </div>
         </div>
@@ -112,34 +127,42 @@ export default function MissionControl() {
         {/* Global P99 Latency (Not available from Laptop 1) */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between opacity-85">
           <div className="flex justify-between items-start mb-4">
-            <span className="text-zinc-400 text-sm font-medium">Global P99 Latency</span>
+            <span className="text-zinc-400 text-sm font-medium">
+              Global P99 Latency
+            </span>
             <Clock className="w-5 h-5 text-zinc-600" />
           </div>
           <div>
             <div className="text-3xl font-mono font-bold text-zinc-500">—</div>
-            <div className="text-xs text-zinc-500 mt-1">Not available from Laptop 1</div>
+            <div className="text-xs text-zinc-500 mt-1">
+              Not available from Laptop 1
+            </div>
           </div>
         </div>
 
         {/* Throughput (RPS) (Not available from Laptop 1) */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between opacity-85">
           <div className="flex justify-between items-start mb-4">
-            <span className="text-zinc-400 text-sm font-medium">Throughput (RPS)</span>
+            <span className="text-zinc-400 text-sm font-medium">
+              Throughput (RPS)
+            </span>
             <Server className="w-5 h-5 text-zinc-600" />
           </div>
           <div>
             <div className="text-3xl font-mono font-bold text-zinc-500">—</div>
-            <div className="text-xs text-zinc-500 mt-1">Not available from Laptop 1</div>
+            <div className="text-xs text-zinc-500 mt-1">
+              Not available from Laptop 1
+            </div>
           </div>
         </div>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 1.2 Active Incident Summary */}
+        {/* 1.2 Recent Incident Summary */}
         <section className="lg:col-span-2 space-y-4">
           <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-red-400" />
-            Triage & Recovery Queue
+            Incident Observation Queue
           </h2>
 
           {topIncident ? (
@@ -163,7 +186,11 @@ export default function MissionControl() {
                     </h3>
                   </div>
                   <Link
-                    href={topIncident ? `/incidents?id=${topIncident.id}` : "/incidents"}
+                    href={
+                      topIncident
+                        ? `/incidents?id=${topIncident.id}`
+                        : "/incidents"
+                    }
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2 rounded text-sm transition-colors font-medium border border-zinc-700"
                   >
                     View Incidents
@@ -177,24 +204,24 @@ export default function MissionControl() {
                   <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">
                     Diagnosis
                   </div>
-                  <div className="text-sm font-medium text-zinc-400">
-                    Awaiting Phase 3 / Debate
+                  <div className="text-sm font-medium text-zinc-400 uppercase">
+                    Awaiting {STATIC_ENGINE_REGISTRY.debate.name}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">
                     Shadow Sandbox
                   </div>
-                  <div className="text-sm font-medium text-zinc-500">
-                    Not connected
+                  <div className="text-sm font-medium text-zinc-500 uppercase">
+                    {STATIC_ENGINE_REGISTRY.shadow.status.replace("_", " ")}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">
                     Policy Engine
                   </div>
-                  <div className="text-sm font-medium text-zinc-500">
-                    Not connected
+                  <div className="text-sm font-medium text-zinc-500 uppercase">
+                    {STATIC_ENGINE_REGISTRY.policy.status.replace("_", " ")}
                   </div>
                 </div>
               </div>
@@ -230,8 +257,8 @@ export default function MissionControl() {
               <div className="text-3xl font-bold font-mono text-zinc-500">
                 —
               </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                Awaiting Impact Engine (Phase 4)
+              <p className="text-xs text-zinc-500 mt-1 uppercase">
+                Awaiting {STATIC_ENGINE_REGISTRY.impact.name}
               </p>
             </div>
 
@@ -239,11 +266,10 @@ export default function MissionControl() {
               <div className="text-sm text-zinc-400 font-medium mb-2">
                 Estimated Avoided Loss
               </div>
-              <div className="text-xl font-bold font-mono text-zinc-500">
-                —
-              </div>
+              <div className="text-xl font-bold font-mono text-zinc-500">—</div>
               <p className="text-xs text-zinc-500 mt-2 leading-relaxed">
-                Loss avoidance metrics will calculate automatically when the Impact Engine is connected.
+                Loss avoidance metrics will calculate automatically when the
+                Impact Engine is connected.
               </p>
             </div>
           </div>

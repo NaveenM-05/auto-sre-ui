@@ -306,7 +306,7 @@ describe("LiveGatewayStore (Phase 4.1 Contract Alignment)", () => {
     state = store.getSnapshot();
     expect(state.recentIncidents.length).toBe(2);
     expect(state.recentIncidents[0].logClusterTemplate).toBe(
-      "Auth Service Latency Spike (Mitigated)"
+      "Auth Service Latency Spike (Mitigated)",
     );
   });
 

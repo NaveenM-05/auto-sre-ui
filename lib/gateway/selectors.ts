@@ -10,7 +10,9 @@ import {
 } from "./view-models";
 import { Node, Edge } from "@xyflow/react";
 
-export function useGatewayStore<T>(selector: (state: GatewayStoreState) => T): T {
+export function useGatewayStore<T>(
+  selector: (state: GatewayStoreState) => T,
+): T {
   const lastSelectedRef = useRef<T | undefined>(undefined);
 
   const getSnapshot = () => {
@@ -30,7 +32,7 @@ export function useGatewayStore<T>(selector: (state: GatewayStoreState) => T): T
   return useSyncExternalStore(
     globalGatewayStore.subscribe,
     getSnapshot,
-    getSnapshot
+    getSnapshot,
   );
 }
 
@@ -89,7 +91,11 @@ export function useRecentIncidents(): {
     return (rawRecent || []).map(toIncidentDisplayModel);
   }, [rawRecent]);
 
-  return { recent, activeCount: activeCount && activeCount > 0 ? activeCount : recent.length, totalCount };
+  return {
+    recent,
+    activeCount: activeCount && activeCount > 0 ? activeCount : recent.length,
+    totalCount,
+  };
 }
 
 export function useReactFlowGraph(): { nodes: Node[]; edges: Edge[] } {

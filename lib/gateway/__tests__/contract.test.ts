@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { LiveGatewayStore } from "../live-store";
 import { GatewayEventClient } from "../events";
-import { toIncidentDisplayModel, toReactFlowNodes, toReactFlowEdges } from "../view-models";
+import {
+  toIncidentDisplayModel,
+  toReactFlowNodes,
+  toReactFlowEdges,
+} from "../view-models";
 import {
   GatewaySystemSnapshot,
   GatewaySystemSummary,
@@ -195,7 +199,9 @@ describe("Laptop 1 Gateway Contract & View Model Alignment", () => {
     const state = store.getSnapshot();
 
     expect(state.systemSummary?.healthScore).toBe(92);
-    expect(state.systemSummary?.sourceTimestamp).toBe("2026-09-02T12:00:00.000Z");
+    expect(state.systemSummary?.sourceTimestamp).toBe(
+      "2026-09-02T12:00:00.000Z",
+    );
     expect(state.systemSummary?.freshness).toBe("fresh");
     expect(state.infrastructure).toHaveLength(2);
     expect(state.infrastructure[0].id).toBe("api-gateway");
@@ -254,13 +260,15 @@ describe("Laptop 1 Gateway Contract & View Model Alignment", () => {
 
     expect(displayModel.id).toBe("auth-service_12000000");
     expect(displayModel.service).toBe("auth-service");
-    expect(displayModel.title).toBe("Connection timeout to postgres after 5000ms");
+    expect(displayModel.title).toBe(
+      "Connection timeout to postgres after 5000ms",
+    );
     expect(displayModel.severity).toBe("HIGH");
     expect(displayModel.timestamp).toBe("2026-09-02T12:00:00.000Z");
 
     const flowNodes = toReactFlowNodes(
       SAMPLE_REAL_SNAPSHOT.topology,
-      SAMPLE_REAL_SNAPSHOT.infrastructure
+      SAMPLE_REAL_SNAPSHOT.infrastructure,
     );
     expect(flowNodes).toHaveLength(2);
     expect(flowNodes[0].id).toBe("api-gateway");

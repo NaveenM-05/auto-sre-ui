@@ -1,4 +1,4 @@
-﻿import {
+import {
   GatewaySystemSnapshot,
   UiHealthResponse,
   UiPipelineResponse,
@@ -10,11 +10,20 @@
   GatewayIncidentDetail,
   GatewayIncidentEvidenceResponse,
 } from "./types";
+import {
+  incidentDetailPath,
+  incidentEvidencePath,
+  infrastructureDetailPath,
+} from "./routes";
 
 const PROXY_BASE = "/api/gateway";
 
 export class GatewayApiError extends Error {
-  constructor(message: string, public status: number, public code?: string) {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+  ) {
     super(message);
     this.name = "GatewayApiError";
   }
@@ -56,12 +65,18 @@ export async function fetchGatewaySummary(): Promise<GatewaySystemSummary> {
   return fetchJson<GatewaySystemSummary>("/system/summary");
 }
 
-export async function fetchGatewayInfrastructure(): Promise<GatewayInfrastructureService[]> {
+export async function fetchGatewayInfrastructure(): Promise<
+  GatewayInfrastructureService[]
+> {
   return fetchJson<GatewayInfrastructureService[]>("/infrastructure");
 }
 
-export async function fetchGatewayServiceDetail(serviceId: string): Promise<GatewayInfrastructureDetail> {
-  return fetchJson<GatewayInfrastructureDetail>(`/infrastructure/${encodeURIComponent(serviceId)}`);
+export async function fetchGatewayServiceDetail(
+  serviceId: string,
+): Promise<GatewayInfrastructureDetail> {
+  return fetchJson<GatewayInfrastructureDetail>(
+    infrastructureDetailPath(serviceId),
+  );
 }
 
 export async function fetchGatewayTopology(): Promise<GatewayTopologyGraph> {
@@ -84,13 +99,19 @@ export async function fetchGatewayIncidents(params?: {
   if (params?.severity) qs.set("severity", params.severity);
   if (params?.since) qs.set("since", params.since);
   const q = qs.toString();
-  return fetchJson<GatewayIncidentListResponse>("/incidents" + (q ? "?" + q : ""));
+  return fetchJson<GatewayIncidentListResponse>(
+    "/incidents" + (q ? "?" + q : ""),
+  );
 }
 
-export async function fetchGatewayIncidentDetail(id: string): Promise<GatewayIncidentDetail> {
-  return fetchJson<GatewayIncidentDetail>("/incidents/" + encodeURIComponent(id));
+export async function fetchGatewayIncidentDetail(
+  id: string,
+): Promise<GatewayIncidentDetail> {
+  return fetchJson<GatewayIncidentDetail>(incidentDetailPath(id));
 }
 
-export async function fetchGatewayIncidentEvidence(id: string): Promise<GatewayIncidentEvidenceResponse> {
-  return fetchJson<GatewayIncidentEvidenceResponse>("/incidents/" + encodeURIComponent(id) + "/evidence");
+export async function fetchGatewayIncidentEvidence(
+  id: string,
+): Promise<GatewayIncidentEvidenceResponse> {
+  return fetchJson<GatewayIncidentEvidenceResponse>(incidentEvidencePath(id));
 }

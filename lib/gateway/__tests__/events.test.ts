@@ -39,7 +39,9 @@ describe("Gateway Event Client & Stream Processing (Phase 4.1)", () => {
 
   it("should handle stream.ready with resyncRequired = true", () => {
     store.setConnectionState("connecting");
-    const resyncSpy = vi.spyOn(store, "handleResync").mockImplementation(async () => {});
+    const resyncSpy = vi
+      .spyOn(store, "handleResync")
+      .mockImplementation(async () => {});
 
     const rawFrame = `event: stream.ready\ndata: ${JSON.stringify({
       eventType: "stream.ready",
@@ -61,7 +63,9 @@ describe("Gateway Event Client & Stream Processing (Phase 4.1)", () => {
 
   it("should handle stream.resync_required and extract reason from payload", () => {
     store.setConnectionState("live");
-    const resyncSpy = vi.spyOn(store, "handleResync").mockImplementation(async () => {});
+    const resyncSpy = vi
+      .spyOn(store, "handleResync")
+      .mockImplementation(async () => {});
 
     const rawFrame = `event: stream.resync_required\ndata: ${JSON.stringify({
       eventType: "stream.resync_required",
@@ -81,7 +85,9 @@ describe("Gateway Event Client & Stream Processing (Phase 4.1)", () => {
 
   it("should handle malformed control envelope safely without crashing", () => {
     expect(() => {
-      client.parseAndDispatchFrame("event: stream.ready\ndata: { invalid json ");
+      client.parseAndDispatchFrame(
+        "event: stream.ready\ndata: { invalid json ",
+      );
       client.parseAndDispatchFrame("event: stream.ready\ndata: null");
       client.parseAndDispatchFrame("event: stream.resync_required\ndata: {}");
     }).not.toThrow();

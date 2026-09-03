@@ -1,10 +1,14 @@
-import GlobalSidebar from '@/components/layout/GlobalSidebar';
-import GlobalHeader from '@/components/layout/GlobalHeader';
-import CommandPalette from '@/components/shared/CommandPalette';
-import GatewayProvider from '@/components/layout/GatewayProvider';
-import './globals.css';
+import GlobalSidebar from "@/components/layout/GlobalSidebar";
+import GlobalHeader from "@/components/layout/GlobalHeader";
+import CommandPalette from "@/components/shared/CommandPalette";
+import GatewayProvider from "@/components/layout/GatewayProvider";
+import "./globals.css";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" className="dark">
       <body className="bg-zinc-950 text-zinc-300 antialiased min-h-screen flex">

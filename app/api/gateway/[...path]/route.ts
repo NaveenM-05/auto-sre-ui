@@ -21,13 +21,13 @@ const ALLOWED_PATH_PATTERNS = [
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ path: string[] }> }
+  context: { params: Promise<{ path: string[] }> },
 ) {
   const { path } = await context.params;
   const pathString = path.join("/");
 
   const isAllowed = ALLOWED_PATH_PATTERNS.some((pattern) =>
-    pattern.test(pathString)
+    pattern.test(pathString),
   );
 
   if (!isAllowed) {
@@ -39,7 +39,7 @@ export async function GET(
       {
         status: 403,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 
@@ -85,7 +85,7 @@ export async function GET(
         {
           status: 504,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -98,7 +98,7 @@ export async function GET(
       {
         status: 503,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 }

@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         {
           status: upstreamRes.status,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
         {
           status: 502,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
       {
         status: 503,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 }

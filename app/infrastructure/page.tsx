@@ -33,9 +33,7 @@ import {
   useRecentIncidents,
   useReactFlowGraph,
 } from "@/lib/gateway/selectors";
-import {
-  GatewayInfrastructureDetail,
-} from "@/lib/gateway/types";
+import { GatewayInfrastructureDetail } from "@/lib/gateway/types";
 import { fetchGatewayServiceDetail } from "@/lib/gateway/client";
 
 // Icon selector helper
@@ -45,7 +43,11 @@ const getServiceIcon = (name: string) => {
   if (lower.includes("auth")) return Key;
   if (lower.includes("order")) return ShoppingCart;
   if (lower.includes("pay")) return CreditCard;
-  if (lower.includes("db") || lower.includes("chroma") || lower.includes("postgres"))
+  if (
+    lower.includes("db") ||
+    lower.includes("chroma") ||
+    lower.includes("postgres")
+  )
     return Database;
   return Server;
 };
@@ -65,7 +67,8 @@ const CustomServiceNode = ({ data }: any) => {
   let statusText = "Unknown";
 
   if (isDanger) {
-    borderStyle = "border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.25)] animate-pulse";
+    borderStyle =
+      "border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.25)] animate-pulse";
     iconBg = "bg-red-500/20 text-red-400";
     statusColor = "text-red-400 font-bold";
     statusText = "Unhealthy";
@@ -85,7 +88,11 @@ const CustomServiceNode = ({ data }: any) => {
     <div
       className={`px-4 py-3 rounded-lg border-2 flex items-center gap-3 bg-zinc-950 min-w-[170px] shadow-lg transition-all ${borderStyle}`}
     >
-      <Handle type="target" position={Position.Top} className="w-2 h-2 bg-zinc-600 border-none" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-2 h-2 bg-zinc-600 border-none"
+      />
       <div className={`p-2 rounded-md ${iconBg}`}>
         <Icon className="w-5 h-5" />
       </div>
@@ -98,7 +105,11 @@ const CustomServiceNode = ({ data }: any) => {
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 bg-zinc-600 border-none" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-2 h-2 bg-zinc-600 border-none"
+      />
     </div>
   );
 };
@@ -110,8 +121,11 @@ export default function InfrastructurePage() {
   const { recent } = useRecentIncidents();
 
   // State for Service Detail Drawer
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [extraServiceDetail, setExtraServiceDetail] = useState<GatewayInfrastructureDetail | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
+    null,
+  );
+  const [extraServiceDetail, setExtraServiceDetail] =
+    useState<GatewayInfrastructureDetail | null>(null);
 
   // When a service is selected, load detailed state from detail endpoint
   useEffect(() => {
@@ -153,7 +167,7 @@ export default function InfrastructurePage() {
   };
 
   const cachedListItem = infrastructure.find(
-    (s) => s.id === selectedServiceId || s.name === selectedServiceId
+    (s) => s.id === selectedServiceId || s.name === selectedServiceId,
   );
 
   return (
@@ -170,7 +184,9 @@ export default function InfrastructurePage() {
         </div>
         <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-md">
           <Info className="w-4 h-4 text-zinc-500" />
-          <span className="text-sm font-medium text-zinc-400">Chaos: unavailable</span>
+          <span className="text-sm font-medium text-zinc-400">
+            Chaos: unavailable
+          </span>
         </div>
       </div>
 
@@ -178,10 +194,14 @@ export default function InfrastructurePage() {
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium mb-1">Average Service CPU</p>
+            <p className="text-xs text-zinc-500 font-medium mb-1">
+              Average Service CPU
+            </p>
             <p
               className={`text-2xl font-mono font-bold ${
-                avgCpu !== null && avgCpu > 80 ? "text-red-400" : "text-zinc-100"
+                avgCpu !== null && avgCpu > 80
+                  ? "text-red-400"
+                  : "text-zinc-100"
               }`}
             >
               {avgCpu !== null ? `${avgCpu.toFixed(1)}%` : "—"}
@@ -189,14 +209,18 @@ export default function InfrastructurePage() {
           </div>
           <Cpu
             className={`w-8 h-8 ${
-              avgCpu !== null && avgCpu > 80 ? "text-red-500/50" : "text-zinc-700"
+              avgCpu !== null && avgCpu > 80
+                ? "text-red-500/50"
+                : "text-zinc-700"
             }`}
           />
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium mb-1">Average Service Memory</p>
+            <p className="text-xs text-zinc-500 font-medium mb-1">
+              Average Service Memory
+            </p>
             <p className="text-2xl font-mono font-bold text-zinc-100">
               {avgMemory !== null ? `${avgMemory.toFixed(1)}%` : "—"}
             </p>
@@ -206,7 +230,9 @@ export default function InfrastructurePage() {
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between opacity-80">
           <div>
-            <p className="text-xs text-zinc-500 font-medium mb-1">Gateway Latency</p>
+            <p className="text-xs text-zinc-500 font-medium mb-1">
+              Gateway Latency
+            </p>
             <p className="text-2xl font-mono font-bold text-zinc-500">—</p>
           </div>
           <Timer className="w-8 h-8 text-zinc-700" />
@@ -214,7 +240,9 @@ export default function InfrastructurePage() {
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between opacity-80">
           <div>
-            <p className="text-xs text-zinc-500 font-medium mb-1">Error Rate (5m)</p>
+            <p className="text-xs text-zinc-500 font-medium mb-1">
+              Error Rate (5m)
+            </p>
             <p className="text-2xl font-mono font-bold text-zinc-500">—</p>
           </div>
           <AlertTriangle className="w-8 h-8 text-zinc-700" />
@@ -261,7 +289,9 @@ export default function InfrastructurePage() {
                   <div className="font-bold text-zinc-100 flex items-center gap-2 truncate">
                     <Server className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span className="truncate uppercase">
-                      {extraServiceDetail?.name || cachedListItem?.name || selectedServiceId}
+                      {extraServiceDetail?.name ||
+                        cachedListItem?.name ||
+                        selectedServiceId}
                     </span>
                   </div>
                   <button
@@ -283,36 +313,46 @@ export default function InfrastructurePage() {
                         <span className="text-zinc-400">Health State</span>
                         <span
                           className={`font-bold capitalize ${
-                            (extraServiceDetail?.healthState || cachedListItem?.healthState) === "healthy"
+                            (extraServiceDetail?.healthState ||
+                              cachedListItem?.healthState) === "healthy"
                               ? "text-emerald-400"
-                              : (extraServiceDetail?.healthState || cachedListItem?.healthState) === "degraded"
-                              ? "text-amber-400"
-                              : "text-red-400"
+                              : (extraServiceDetail?.healthState ||
+                                    cachedListItem?.healthState) === "degraded"
+                                ? "text-amber-400"
+                                : "text-red-400"
                           }`}
                         >
-                          {extraServiceDetail?.healthState || cachedListItem?.healthState || "—"}
+                          {extraServiceDetail?.healthState ||
+                            cachedListItem?.healthState ||
+                            "—"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Health Score</span>
                         <span className="font-mono text-zinc-200">
-                          {extraServiceDetail?.healthScore !== null && extraServiceDetail?.healthScore !== undefined
+                          {extraServiceDetail?.healthScore !== null &&
+                          extraServiceDetail?.healthScore !== undefined
                             ? `${extraServiceDetail.healthScore}%`
-                            : cachedListItem?.healthScore !== null && cachedListItem?.healthScore !== undefined
-                            ? `${cachedListItem.healthScore}%`
-                            : "—"}
+                            : cachedListItem?.healthScore !== null &&
+                                cachedListItem?.healthScore !== undefined
+                              ? `${cachedListItem.healthScore}%`
+                              : "—"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Docker Status</span>
                         <span className="font-mono text-zinc-200">
-                          {extraServiceDetail?.dockerStatus || cachedListItem?.dockerStatus || "—"}
+                          {extraServiceDetail?.dockerStatus ||
+                            cachedListItem?.dockerStatus ||
+                            "—"}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Health Check</span>
                         <span className="font-mono text-zinc-200">
-                          {extraServiceDetail?.healthCheck || cachedListItem?.healthCheck || "—"}
+                          {extraServiceDetail?.healthCheck ||
+                            cachedListItem?.healthCheck ||
+                            "—"}
                         </span>
                       </div>
                     </div>
@@ -325,37 +365,49 @@ export default function InfrastructurePage() {
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
-                        <div className="text-xs text-zinc-500 mb-1">CPU Usage</div>
+                        <div className="text-xs text-zinc-500 mb-1">
+                          CPU Usage
+                        </div>
                         <div className="font-mono text-sm text-zinc-200">
-                          {extraServiceDetail?.cpuPercent !== null && extraServiceDetail?.cpuPercent !== undefined
+                          {extraServiceDetail?.cpuPercent !== null &&
+                          extraServiceDetail?.cpuPercent !== undefined
                             ? `${extraServiceDetail.cpuPercent.toFixed(1)}%`
-                            : cachedListItem?.cpu !== null && cachedListItem?.cpu !== undefined
-                            ? `${cachedListItem.cpu.toFixed(1)}%`
-                            : "—"}
+                            : cachedListItem?.cpu !== null &&
+                                cachedListItem?.cpu !== undefined
+                              ? `${cachedListItem.cpu.toFixed(1)}%`
+                              : "—"}
                         </div>
                       </div>
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
                         <div className="text-xs text-zinc-500 mb-1">Memory</div>
                         <div className="font-mono text-sm text-zinc-200">
-                          {extraServiceDetail?.memoryPercent !== null && extraServiceDetail?.memoryPercent !== undefined
+                          {extraServiceDetail?.memoryPercent !== null &&
+                          extraServiceDetail?.memoryPercent !== undefined
                             ? `${extraServiceDetail.memoryPercent.toFixed(1)}%`
-                            : cachedListItem?.memory !== null && cachedListItem?.memory !== undefined
-                            ? `${cachedListItem.memory.toFixed(1)}%`
-                            : "—"}
+                            : cachedListItem?.memory !== null &&
+                                cachedListItem?.memory !== undefined
+                              ? `${cachedListItem.memory.toFixed(1)}%`
+                              : "—"}
                         </div>
                       </div>
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
-                        <div className="text-xs text-zinc-500 mb-1">Network RX</div>
+                        <div className="text-xs text-zinc-500 mb-1">
+                          Network RX
+                        </div>
                         <div className="font-mono text-xs text-zinc-300">
-                          {extraServiceDetail?.networkRx !== null && extraServiceDetail?.networkRx !== undefined
+                          {extraServiceDetail?.networkRx !== null &&
+                          extraServiceDetail?.networkRx !== undefined
                             ? `${(extraServiceDetail.networkRx / 1024).toFixed(1)} KB`
                             : "—"}
                         </div>
                       </div>
                       <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg">
-                        <div className="text-xs text-zinc-500 mb-1">Network TX</div>
+                        <div className="text-xs text-zinc-500 mb-1">
+                          Network TX
+                        </div>
                         <div className="font-mono text-xs text-zinc-300">
-                          {extraServiceDetail?.networkTx !== null && extraServiceDetail?.networkTx !== undefined
+                          {extraServiceDetail?.networkTx !== null &&
+                          extraServiceDetail?.networkTx !== undefined
                             ? `${(extraServiceDetail.networkTx / 1024).toFixed(1)} KB`
                             : "—"}
                         </div>
@@ -369,9 +421,12 @@ export default function InfrastructurePage() {
                       Incident Evidence
                     </h3>
                     <div className="bg-[#09090b] border border-zinc-800 p-3 rounded-lg text-xs text-zinc-400 space-y-1">
-                      <p className="font-medium text-zinc-300">Authoritative Evidence</p>
+                      <p className="font-medium text-zinc-300">
+                        Authoritative Evidence
+                      </p>
                       <p className="text-zinc-500 text-[11px] leading-relaxed">
-                        Diagnostic evidence snapshots and logs are viewable in the Incident Center.
+                        Diagnostic evidence snapshots and logs are viewable in
+                        the Incident Center.
                       </p>
                     </div>
                   </div>
@@ -388,7 +443,9 @@ export default function InfrastructurePage() {
               <ShieldAlert className="w-5 h-5 text-red-400" />
               <h2 className="text-lg font-semibold">Incident Feed</h2>
             </div>
-            <span className="text-xs font-mono text-zinc-500">Laptop 1 Stream</span>
+            <span className="text-xs font-mono text-zinc-500">
+              Laptop 1 Stream
+            </span>
           </div>
           <div className="flex-grow overflow-y-auto p-4 space-y-3">
             {recent && recent.length > 0 ? (
@@ -403,8 +460,8 @@ export default function InfrastructurePage() {
                       inc.severity === "CRITICAL" || inc.severity === "P1"
                         ? "bg-red-500/10 text-red-500 border border-red-500/20"
                         : inc.severity === "HIGH" || inc.severity === "P2"
-                        ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-                        : "bg-zinc-800 text-zinc-400"
+                          ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+                          : "bg-zinc-800 text-zinc-400"
                     }`}
                   >
                     {inc.severity}
@@ -415,7 +472,12 @@ export default function InfrastructurePage() {
                     </div>
                     <div className="text-xs text-zinc-500 font-mono mt-1 flex justify-between">
                       <span>{inc.service}</span>
-                      <span>{inc.timestamp ? (inc.timestamp.split("T")[1]?.slice(0, 8) || inc.timestamp) : "—"}</span>
+                      <span>
+                        {inc.timestamp
+                          ? inc.timestamp.split("T")[1]?.slice(0, 8) ||
+                            inc.timestamp
+                          : "—"}
+                      </span>
                     </div>
                   </div>
                 </Link>

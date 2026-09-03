@@ -81,7 +81,10 @@ export class LiveGatewayStore {
     }
   }
 
-  public setConnectionState(connection: ConnectionState, error?: string | null) {
+  public setConnectionState(
+    connection: ConnectionState,
+    error?: string | null,
+  ) {
     if (
       this.state.connection === connection &&
       this.state.lastError === (error ?? null)
@@ -121,7 +124,7 @@ export class LiveGatewayStore {
         const existing = nextTelemetry[pt.container];
         if (!existing.some((p) => p.timestamp === pt.timestamp)) {
           nextTelemetry[pt.container] = [...existing, pt].slice(
-            -MAX_TELEMETRY_POINTS_PER_CONTAINER
+            -MAX_TELEMETRY_POINTS_PER_CONTAINER,
           );
         }
       }
@@ -148,7 +151,7 @@ export class LiveGatewayStore {
       topology: snapshot.topology || null,
       telemetry: nextTelemetry,
       healthHistory: (snapshot.healthHistory || []).slice(
-        -MAX_HEALTH_HISTORY_POINTS
+        -MAX_HEALTH_HISTORY_POINTS,
       ),
       recentIncidents: snapshot.incidents?.recent || [],
       activeIncidentCount: snapshot.incidents?.activeCount ?? null,
@@ -207,7 +210,7 @@ export class LiveGatewayStore {
         const updatedService = event.payload as GatewayInfrastructureService;
         const existingList = nextState.infrastructure;
         const index = existingList.findIndex(
-          (s) => s.id === updatedService.id || s.name === updatedService.name
+          (s) => s.id === updatedService.id || s.name === updatedService.name,
         );
         if (index >= 0) {
           const updatedList = [...existingList];
@@ -241,7 +244,7 @@ export class LiveGatewayStore {
           nextState.telemetry = {
             ...nextState.telemetry,
             [pt.container]: [...currentContainerPoints, pt].slice(
-              -MAX_TELEMETRY_POINTS_PER_CONTAINER
+              -MAX_TELEMETRY_POINTS_PER_CONTAINER,
             ),
           };
           stateChanged = true;
@@ -251,9 +254,11 @@ export class LiveGatewayStore {
 
       case "health_history.point": {
         const pt = event.payload as HealthHistoryPoint;
-        if (!nextState.healthHistory.some((p) => p.timestamp === pt.timestamp)) {
+        if (
+          !nextState.healthHistory.some((p) => p.timestamp === pt.timestamp)
+        ) {
           nextState.healthHistory = [...nextState.healthHistory, pt].slice(
-            -MAX_HEALTH_HISTORY_POINTS
+            -MAX_HEALTH_HISTORY_POINTS,
           );
           stateChanged = true;
         }
@@ -263,7 +268,7 @@ export class LiveGatewayStore {
       case "incident.created": {
         const incident = event.payload as GatewayIncidentItem;
         const filtered = nextState.recentIncidents.filter(
-          (inc) => inc.id !== incident.id
+          (inc) => inc.id !== incident.id,
         );
         nextState.recentIncidents = [incident, ...filtered].slice(0, 50);
         if (nextState.activeIncidentCount !== null) {
@@ -276,7 +281,7 @@ export class LiveGatewayStore {
       case "incident.updated": {
         const incident = event.payload as GatewayIncidentItem;
         const idx = nextState.recentIncidents.findIndex(
-          (inc) => inc.id === incident.id
+          (inc) => inc.id === incident.id,
         );
         if (idx >= 0) {
           const updated = [...nextState.recentIncidents];
@@ -350,7 +355,7 @@ export class LiveGatewayStore {
       this.pendingBootstrapEvents = [];
       this.setConnectionState(
         "offline",
-        err?.message || "Failed to hydrate system snapshot"
+        err?.message || "Failed to hydrate system snapshot",
       );
     }
   }

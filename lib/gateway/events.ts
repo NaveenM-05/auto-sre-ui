@@ -124,9 +124,7 @@ export class GatewayEventClient {
 
       if (effectiveEventType === "stream.ready") {
         const readyPayload: StreamReadyPayload =
-          parsedData.payload !== undefined
-            ? parsedData.payload
-            : parsedData;
+          parsedData.payload !== undefined ? parsedData.payload : parsedData;
 
         if (
           readyPayload &&
@@ -135,7 +133,7 @@ export class GatewayEventClient {
         ) {
           this.store.setGatewayInstance(
             readyPayload.gatewayInstanceId,
-            readyPayload.latestSequence
+            readyPayload.latestSequence,
           );
 
           if (readyPayload.resyncRequired) {
@@ -154,13 +152,11 @@ export class GatewayEventClient {
 
       if (effectiveEventType === "stream.resync_required") {
         const resyncPayload: StreamResyncRequiredPayload =
-          parsedData.payload !== undefined
-            ? parsedData.payload
-            : parsedData;
+          parsedData.payload !== undefined ? parsedData.payload : parsedData;
 
         const reason = resyncPayload?.reason || "unknown";
         console.warn(
-          `[gateway-sse] Resync required (${reason}). Refetching system snapshot.`
+          `[gateway-sse] Resync required (${reason}). Refetching system snapshot.`,
         );
         this.store.handleResync();
         return;
@@ -202,7 +198,9 @@ export class GatewayEventClient {
     this.stopWatchdog();
     this.heartbeatWatchdog = setInterval(() => {
       if (Date.now() - this.lastMessageTimestamp > 35000) {
-        console.warn("[gateway-sse] Heartbeat watchdog timeout. Reconnecting...");
+        console.warn(
+          "[gateway-sse] Heartbeat watchdog timeout. Reconnecting...",
+        );
         this.disconnect();
         this.connect();
       }

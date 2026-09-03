@@ -1,15 +1,11 @@
 // Exact locked backend DTO contracts from Laptop 1 UI Gateway (tcp_aum)
 
 export type HealthClassification = "healthy" | "degraded" | "unhealthy";
-export type FreshnessClassification = "fresh" | "delayed" | "stale" | "unavailable";
+export type FreshnessClassification =
+  "fresh" | "delayed" | "stale" | "unavailable";
 
 export type ConnectionState =
-  | "idle"
-  | "connecting"
-  | "live"
-  | "reconnecting"
-  | "resyncing"
-  | "offline";
+  "idle" | "connecting" | "live" | "reconnecting" | "resyncing" | "offline";
 
 export interface UiHealthResponse {
   available: boolean;

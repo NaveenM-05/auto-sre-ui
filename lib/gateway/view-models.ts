@@ -24,26 +24,33 @@ export interface IncidentDisplayModel {
 }
 
 export function toIncidentDisplayModel(
-  incident: GatewayIncidentItem
+  incident: GatewayIncidentItem,
 ): IncidentDisplayModel {
   const service = incident.targetService || "Unknown Service";
 
   let title = `Incident on ${service}`;
-  if (incident.logClusterTemplate && incident.logClusterTemplate.trim().length > 0) {
+  if (
+    incident.logClusterTemplate &&
+    incident.logClusterTemplate.trim().length > 0
+  ) {
     const tmpl = incident.logClusterTemplate;
     // Attempt to extract "message" field if it's a pseudo-JSON template
     const msgMatch = tmpl.match(/"message"\s*:\s*(.+?)\s*,"[a-zA-Z_]+"\s*:/);
     if (msgMatch && msgMatch[1]) {
       // Clean up the extracted message (remove <VAR>, quotes, etc.)
-      title = msgMatch[1].replace(/<VAR>/g, '...').replace(/^"|"$/g, '').trim();
+      title = msgMatch[1].replace(/<VAR>/g, "...").replace(/^"|"$/g, "").trim();
     } else {
       // Fallback: strip JSON formatting to make it somewhat readable, or just use the service name
-      title = tmpl.substring(0, 100).replace(/[{}"\\]/g, ' ').trim();
+      title = tmpl
+        .substring(0, 100)
+        .replace(/[{}"\\]/g, " ")
+        .trim();
     }
   }
 
   // MUST remain null when both timestamps absent — do NOT fall back to new Date()
-  const timestamp = incident.latestTimestamp ?? incident.earliestTimestamp ?? null;
+  const timestamp =
+    incident.latestTimestamp ?? incident.earliestTimestamp ?? null;
 
   return {
     id: incident.id,
@@ -71,7 +78,7 @@ const HEALTH_NODE_COLOR: Record<string, string> = {
 
 export function toReactFlowNodes(
   topology: GatewayTopologyGraph | null,
-  infrastructure: GatewayInfrastructureService[]
+  infrastructure: GatewayInfrastructureService[],
 ): Node[] {
   if (!topology?.nodes || topology.nodes.length === 0) return [];
 
@@ -88,7 +95,8 @@ export function toReactFlowNodes(
     const infra = infraByName.get(node.id) || infraByName.get(node.name);
     const healthState = infra?.healthState || node.status || "unknown";
     const borderColor =
-      HEALTH_NODE_COLOR[healthState as keyof typeof HEALTH_NODE_COLOR] || HEALTH_NODE_COLOR.unknown;
+      HEALTH_NODE_COLOR[healthState as keyof typeof HEALTH_NODE_COLOR] ||
+      HEALTH_NODE_COLOR.unknown;
 
     const col = idx % cols;
     const row = Math.floor(idx / cols);
@@ -129,8 +137,8 @@ export function toReactFlowEdges(edges: GatewayTopologyEdge[]): Edge[] {
         edge.status === "healthy"
           ? "#10b981"
           : edge.status === "degraded"
-          ? "#f59e0b"
-          : "#52525b",
+            ? "#f59e0b"
+            : "#52525b",
       strokeWidth: 1.5,
     },
     animated: edge.status === "degraded",
